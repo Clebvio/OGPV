@@ -8,7 +8,17 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; }
-    .info { position: absolute; bottom: 20px; left: 10px; background: white; padding: 6px 12px; border-radius: 4px; font-size: 14px; box-shadow: 0 0 10px rgba(0,0,0,0.2); }
+    .info {
+      position: absolute;
+      bottom: 20px;
+      left: 10px;
+      background: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      z-index: 1000;
+    }
   </style>
 </head>
 <body>
@@ -16,75 +26,75 @@
   <div class="info" id="info">Hover over the map to see solar irradiance...</div>
 
   <!-- Scripts -->
-<!-- Leaflet & required libraries -->
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://unpkg.com/geotiff/dist/geotiff.bundle.min.js"></script>
-<script src="https://unpkg.com/plotty"></script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/geotiff/dist/geotiff.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/plotty@0.5.0/build/plotty.min.js"></script>
+  <script src="https://unpkg.com/leaflet-geotiff/dist/leaflet-geotiff.min.js"></script>
+  <script src="https://unpkg.com/leaflet-geotiff/dist/leaflet-geotiff-plotty.min.js"></script>
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
-<!-- Leaflet GeoTIFF with Plotty Renderer -->
-<script src="https://unpkg.com/leaflet-geotiff/dist/leaflet-geotiff.min.js"></script>
-<script src="https://unpkg.com/leaflet-geotiff/dist/leaflet-geotiff-plotty.min.js"></script>
+  <script>
+    window.onload = function () {
+      const map = L.map('map').setView([39.5, -98.35], 5);
 
-<!-- Leaflet Geocoder -->
-<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+      // Base Map
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
 
-<!-- Your map logic goes INSIDE this function -->
-<script>
-  window.onload = function () {
-    const map = L.map('map').setView([39.5, -98.35], 5);
+      // Info box
+      const info = document.getElementById('info');
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+      // Load the GeoTIFF
+      const tiffLayer = new L.LeafletGeotiff('irri.tif', {
+        band: 0,
+        name: 'Solar Irradiance',
+        displayMin: 0,
+        displayMax: 1000,
+        clampLow: false,
+        clampHigh: false,
+        renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' })
+      }).addTo(map);
 
-    const info = document.getElementById('info');
+      // Show irradiance on click
+      map.on('click', function (e) {
+        const value = tiffLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
+        info.innerHTML = value !== null
+          ? `Solar Irradiance: <strong>${value.toFixed(2)} W/m²</strong> @ (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`
+          : "No data at this location.";
+      });
 
-    const tiffLayer = new L.LeafletGeotiff('irri.tif', {
-      band: 0,
-      name: 'Solar Irradiance',
-      displayMin: 0,
-      displayMax: 1000,
-      colorScale: 'viridis',
-      clampLow: false,
-      clampHigh: false,
-      renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' })
-    }).addTo(map);
+      // Show irradiance on hover
+      map.on('mousemove', function (e) {
+        const value = tiffLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
+        info.innerHTML = value !== null
+          ? `Solar Irradiance: <strong>${value.toFixed(2)} W/m²</strong>`
+          : "No data here...";
+      });
 
-    map.on('click', function (e) {
-      const value = tiffLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
-      info.innerHTML = value !== null
-        ? `Solar Irradiance: <strong>${value.toFixed(2)} W/m²</strong> @ (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`
-        : "No data at this location.";
-    });
-
-    map.on('mousemove', function (e) {
-      const value = tiffLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
-      info.innerHTML = value !== null
-        ? `Solar Irradiance: <strong>${value.toFixed(2)} W/m²</strong>`
-        : "No data here...";
-    });
-
-    // Address search bar
-    L.Control.geocoder({ defaultMarkGeocode: true })
+      // Geocoder for address search
+      L.Control.geocoder({
+        defaultMarkGeocode: true
+      })
       .on('markgeocode', function(e) {
-        map.setView(e.geocode.center, 13);
+        const center = e.geocode.center;
+        map.setView(center, 13);
       })
       .addTo(map);
 
-    // Add customer markers (sample)
-    const customers = [
-      { name: "Customer A", lat: 34.0522, lng: -118.2437 },
-      { name: "Customer B", lat: 36.7783, lng: -119.4179 },
-      { name: "Customer C", lat: 37.7749, lng: -122.4194 }
-    ];
+      // Example customer markers
+      const customers = [
+        { name: "Customer A", lat: 34.0522, lng: -118.2437 }, // Los Angeles
+        { name: "Customer B", lat: 36.7783, lng: -119.4179 }, // Central CA
+        { name: "Customer C", lat: 37.7749, lng: -122.4194 }  // San Francisco
+      ];
 
-    customers.forEach(c => {
-      L.marker([c.lat, c.lng]).addTo(map).bindPopup(`<strong>${c.name}</strong>`);
-    });
-  };
-</script>
-
+      customers.forEach(c => {
+        L.marker([c.lat, c.lng])
+          .addTo(map)
+          .bindPopup(`<strong>${c.name}</strong>`);
+      });
+    };
+  </script>
 </body>
 </html>
-
-
