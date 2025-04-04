@@ -2,12 +2,14 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Solar Resource Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder@1.13.0/dist/Control.Geocoder.css" />
+  <title>GeoTIFF Test Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; }
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+    }
     .info {
       position: absolute;
       bottom: 20px;
@@ -23,72 +25,39 @@
 </head>
 <body>
   <div id="map"></div>
-  <div class="info" id="info">Hover over the map to see solar irradiance...</div>
+  <div class="info" id="info">Move the mouse over the map to see values.</div>
 
-  <!-- Scripts -->
-  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/geotiff@1.0.0-beta.6/dist/geotiff.browser.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/plotty@0.4.0/build/plotty.min.js"></script>
-  <script src="https://unpkg.com/leaflet-geotiff@2.0.7/dist/leaflet-geotiff.min.js"></script>
-  <script src="https://unpkg.com/leaflet-geotiff@2.0.7/dist/leaflet-geotiff-plotty.min.js"></script>
-  <script src="https://unpkg.com/leaflet-control-geocoder@1.13.0/dist/Control.Geocoder.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/geotiff@1.0.0-beta.6/dist/geotiff.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-geotiff@2.0.7/dist/leaflet-geotiff.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-geotiff@2.0.7/dist/leaflet-geotiff-plotty.min.js"></script>
 
   <script>
-    window.onload = function () {
-      const map = L.map('map').setView([39.5, -98.35], 5);
+    const map = L.map('map').setView([39.5, -98.35], 5);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-      const info = document.getElementById('info');
+    const info = document.getElementById('info');
 
-      const tiffLayer = new L.LeafletGeotiff('irri.tif', {
-        band: 0,
-        name: 'Solar Irradiance',
-        displayMin: 0,
-        displayMax: 1000,
-        clampLow: false,
-        clampHigh: false,
-        renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' })
-      }).addTo(map);
+    const layer = new L.LeafletGeotiff('https://geotiffjs.github.io/leaflet-geotiff-examples/raster.tiff', {
+      band: 0,
+      name: 'Test Data',
+      displayMin: 0,
+      displayMax: 255,
+      clampLow: false,
+      clampHigh: false,
+      renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' })
+    }).addTo(map);
 
-      map.on('click', function (e) {
-        const value = tiffLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
-        info.innerHTML = value !== null
-          ? `Solar Irradiance: <strong>${value.toFixed(2)} W/m²</strong> @ (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`
-          : "No data at this location.";
-      });
-
-      map.on('mousemove', function (e) {
-        const value = tiffLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
-        info.innerHTML = value !== null
-          ? `Solar Irradiance: <strong>${value.toFixed(2)} W/m²</strong>`
-          : "No data here...";
-      });
-
-      L.Control.geocoder({
-        defaultMarkGeocode: true
-      })
-      .on('markgeocode', function(e) {
-        const center = e.geocode.center;
-        map.setView(center, 13);
-      })
-      .addTo(map);
-
-      const customers = [
-        { name: "Customer A", lat: 34.0522, lng: -118.2437 },
-        { name: "Customer B", lat: 36.7783, lng: -119.4179 },
-        { name: "Customer C", lat: 37.7749, lng: -122.4194 }
-      ];
-
-      customers.forEach(c => {
-        L.marker([c.lat, c.lng])
-          .addTo(map)
-          .bindPopup(`<strong>${c.name}</strong>`);
-      });
-    };
+    map.on('mousemove', function (e) {
+      const value = layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
+      info.innerHTML = value !== null
+        ? `Value: <strong>${value.toFixed(2)}</strong>`
+        : 'No data here';
+    });
   </script>
 </body>
 </html>
-
