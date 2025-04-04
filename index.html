@@ -45,7 +45,7 @@
       // Info box
       const info = document.getElementById('info');
 
-      // Load the GeoTIFF
+      // Load the GeoTIFF with PlottyRenderer
       const tiffLayer = new L.LeafletGeotiff('irri.tif', {
         band: 0,
         name: 'Solar Irradiance',
@@ -53,7 +53,7 @@
         displayMax: 1000,
         clampLow: false,
         clampHigh: false,
-        renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' })
+        renderer: new L.LeafletGeotiff.PlottyRenderer({ colorScale: 'viridis' })
       }).addTo(map);
 
       // Show irradiance on click
@@ -72,7 +72,7 @@
           : "No data here...";
       });
 
-      // Geocoder for address search
+      // Address search bar
       L.Control.geocoder({
         defaultMarkGeocode: true
       })
@@ -84,9 +84,9 @@
 
       // Example customer markers
       const customers = [
-        { name: "Customer A", lat: 34.0522, lng: -118.2437 }, // Los Angeles
-        { name: "Customer B", lat: 36.7783, lng: -119.4179 }, // Central CA
-        { name: "Customer C", lat: 37.7749, lng: -122.4194 }  // San Francisco
+        { name: "Customer A", lat: 34.0522, lng: -118.2437 }, // LA
+        { name: "Customer B", lat: 36.7783, lng: -119.4179 }, // Fresno
+        { name: "Customer C", lat: 37.7749, lng: -122.4194 }  // SF
       ];
 
       customers.forEach(c => {
@@ -98,3 +98,4 @@
   </script>
 </body>
 </html>
+
