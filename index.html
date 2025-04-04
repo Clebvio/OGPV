@@ -16,14 +16,19 @@
   <div class="info" id="info">Hover over the map to see solar irradiance...</div>
 
   <!-- Scripts -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/geotiff"></script>
-  <script src="https://unpkg.com/plotty"></script>
-  <script src="https://unpkg.com/leaflet-geotiff"></script>
-  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/geotiff"></script>
+<script src="https://unpkg.com/plotty"></script>
+
+<!-- Proper GeoTIFF support with Plotty renderer -->
+<script src="https://unpkg.com/leaflet-geotiff/dist/leaflet-geotiff.min.js"></script>
+<script src="https://unpkg.com/leaflet-geotiff/dist/leaflet-geotiff-plotty.min.js"></script>
+
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
 
   <script>
-    const map = L.map('map').setView([39.5, -98.35], 5);
+    const map = L.map('map').setView([39.5, -115.35], 5);
 
     // Base Map
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
