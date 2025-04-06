@@ -58,7 +58,7 @@
   <script>
     const map = L.map('map').setView([51, -96], 4);
 
-    // Base layer
+    // Base Map
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
@@ -66,14 +66,14 @@
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
 
-    // Image bounds (Canada)
     const bounds = [[41, -140], [61, -52]];
 
-    // Styled image overlays
     const ogirriOverlay = L.imageOverlay('OGIRRI.tif', bounds);
     const ogtiltOverlay = L.imageOverlay('OGTILT.tif', bounds);
 
-    // Transparent data layers (for values only)
+    // ✅ Fix Plotty assignment
+    L.LeafletGeotiff.Plotty = L.LeafletGeotiff?.Plotty || window.LeafletGeotiff?.PlottyRenderer || window.PlottyRenderer || undefined;
+
     const ogirriData = new L.LeafletGeotiff('OGIRRI.tif', {
       band: 1,
       renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' }),
@@ -86,23 +86,21 @@
       opacity: 0
     });
 
-    // Hover value
     map.on('mousemove', function (e) {
-      const activeLayer = map.hasLayer(ogirriOverlay) ? ogirriData : ogtiltData;
-      const val = activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
-      info.innerHTML = val !== null
-        ? `Value: <strong>${val.toFixed(2)}</strong>`
+      const active = map.hasLayer(ogirriOverlay) ? ogirriData : ogtiltData;
+      const value = active.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
+      info.innerHTML = value !== null
+        ? `Value: <strong>${value.toFixed(2)}</strong>`
         : "No data here...";
     });
 
-    // Address search
+    // Search bar
     L.Control.geocoder({
       defaultMarkGeocode: true
     }).on('markgeocode', function(e) {
       map.setView(e.geocode.center, 13);
     }).addTo(map);
 
-    // Legends
     const ogirriLegend = [
       { value: 800, color: "#ffffff" },
       { value: 923.07, color: "#191919" },
@@ -141,7 +139,6 @@
         </div>`).join('');
     }
 
-    // Layer control
     const overlays = {
       "OGIRRI Layer": ogirriOverlay,
       "OGTILT Layer": ogtiltOverlay
