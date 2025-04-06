@@ -47,7 +47,6 @@
   <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
 
-  <!-- Leaflet & GeoTIFF Support -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   <script src="https://unpkg.com/georaster"></script>
@@ -120,60 +119,73 @@
         });
     }
 
-    // OGIRRI
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
       valueMin: 800,
-      valueMax: 1600,
+      valueMax: 1619.15,
       colorScale: val => {
-        if (val < 923) return "#191919";
-        if (val < 1170) return "#4e4e4e";
-        if (val < 1279) return "#6a6a6a";
-        if (val < 1425) return "#7cd2e1";
-        if (val < 1490) return "#93e9e7";
-        if (val < 1588) return "#c7f7c6";
-        return "#f8ff8a";
+        if (val <= 800) return "rgba(255,255,255,1)";
+        if (val <= 923.07) return "rgba(25,25,25,1)";
+        if (val <= 1170.19) return "rgba(78,78,78,1)";
+        if (val <= 1279.48) return "rgba(106,106,106,1)";
+        if (val <= 1425.19) return "rgba(124,210,225,1)";
+        if (val <= 1490.18) return "rgba(147,233,231,1)";
+        if (val <= 1588.63) return "rgba(199,247,198,1)";
+        return "rgba(248,255,138,1)";
       },
       ranges: [
-        { label: "≤ 923", color: "#191919" },
-        { label: "≤ 1170", color: "#4e4e4e" },
-        { label: "≤ 1279", color: "#6a6a6a" },
-        { label: "≤ 1425", color: "#7cd2e1" },
-        { label: "≤ 1490", color: "#93e9e7" },
-        { label: "≤ 1588", color: "#c7f7c6" },
-        { label: "> 1588", color: "#f8ff8a" }
+        { label: "≤ 800", color: "rgba(255,255,255,1)" },
+        { label: "≤ 923", color: "rgba(25,25,25,1)" },
+        { label: "≤ 1170", color: "rgba(78,78,78,1)" },
+        { label: "≤ 1279", color: "rgba(106,106,106,1)" },
+        { label: "≤ 1425", color: "rgba(124,210,225,1)" },
+        { label: "≤ 1490", color: "rgba(147,233,231,1)" },
+        { label: "≤ 1588", color: "rgba(199,247,198,1)" },
+        { label: "> 1588", color: "rgba(248,255,138,1)" }
       ]
     });
 
-    // OGTILT
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
       valueMin: 30,
       valueMax: 54,
       colorScale: val => {
-        if (val < 32) return "#30123b";
-        if (val < 34) return "#4143a7";
-        if (val < 36) return "#3e9cfe";
-        if (val < 38) return "#21c6e1";
-        if (val < 40) return "#48f882";
-        if (val < 42) return "#bbf534";
-        if (val < 44) return "#fbb938";
-        if (val < 46) return "#ef5911";
-        if (val < 48) return "#d43305";
-        return "#7a0403";
+        if (val <= 30.625) return "rgba(48,18,59,1)";
+        if (val <= 32.25) return "rgba(65,67,167,1)";
+        if (val <= 33.875) return "rgba(71,113,233,1)";
+        if (val <= 35.5) return "rgba(62,156,254,1)";
+        if (val <= 37.125) return "rgba(33,198,225,1)";
+        if (val <= 38.75) return "rgba(27,229,181,1)";
+        if (val <= 40.375) return "rgba(72,248,130,1)";
+        if (val <= 42) return "rgba(137,255,77,1)";
+        if (val <= 43.625) return "rgba(187,245,52,1)";
+        if (val <= 45.25) return "rgba(226,220,56,1)";
+        if (val <= 46.875) return "rgba(251,185,56,1)";
+        if (val <= 48.5) return "rgba(253,139,38,1)";
+        if (val <= 50.125) return "rgba(239,89,17,1)";
+        if (val <= 51.75) return "rgba(212,51,5,1)";
+        if (val <= 53.375) return "rgba(172,23,1,1)";
+        return "rgba(122,4,3,1)";
       },
       ranges: [
-        { label: "≤ 32", color: "#30123b" },
-        { label: "≤ 34", color: "#4143a7" },
-        { label: "≤ 36", color: "#3e9cfe" },
-        { label: "≤ 38", color: "#21c6e1" },
-        { label: "≤ 40", color: "#48f882" },
-        { label: "≤ 42", color: "#bbf534" },
-        { label: "≤ 44", color: "#fbb938" },
-        { label: "≤ 46", color: "#ef5911" },
-        { label: "> 48", color: "#7a0403" }
+        { label: "≤ 31", color: "rgba(48,18,59,1)" },
+        { label: "31–32", color: "rgba(65,67,167,1)" },
+        { label: "32–34", color: "rgba(71,113,233,1)" },
+        { label: "34–36", color: "rgba(62,156,254,1)" },
+        { label: "36–37", color: "rgba(33,198,225,1)" },
+        { label: "37–39", color: "rgba(27,229,181,1)" },
+        { label: "39–40", color: "rgba(72,248,130,1)" },
+        { label: "40–42", color: "rgba(137,255,77,1)" },
+        { label: "42–44", color: "rgba(187,245,52,1)" },
+        { label: "44–45", color: "rgba(226,220,56,1)" },
+        { label: "45–47", color: "rgba(251,185,56,1)" },
+        { label: "47–49", color: "rgba(253,139,38,1)" },
+        { label: "49–50", color: "rgba(239,89,17,1)" },
+        { label: "50–52", color: "rgba(212,51,5,1)" },
+        { label: "52–53", color: "rgba(172,23,1,1)" },
+        { label: "> 53", color: "rgba(122,4,3,1)" }
       ]
     });
 
