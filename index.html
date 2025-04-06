@@ -62,13 +62,11 @@
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
 
-    // Add search
     L.Control.geocoder({ defaultMarkGeocode: true })
-      .on('markgeocode', function(e) {
+      .on('markgeocode', function (e) {
         map.setView(e.geocode.center, 12);
       }).addTo(map);
 
-    // Utility for layer legend
     function updateLegend(title, ranges) {
       legend.innerHTML = `<strong>${title}</strong><br>` + ranges.map(r => `
         <div><span class="legend-color" style="background:${r.color}"></span>${r.label}</div>
@@ -104,8 +102,7 @@
             updateLegend(name, ranges);
           }
 
-          // Hover readout
-          map.on('mousemove', function(e) {
+          map.on('mousemove', function (e) {
             Object.entries(layers).forEach(([layerName, layerObj]) => {
               if (!map.hasLayer(layerObj)) return;
 
@@ -180,8 +177,7 @@
       ]
     });
 
-    // Legend update on layer switch
-    map.on('overlayadd', function(e) {
+    map.on('overlayadd', function (e) {
       const layer = layers[e.name];
       if (layer && layer._legend) {
         updateLegend(e.name, layer._legend);
