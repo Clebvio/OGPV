@@ -69,7 +69,7 @@
     const ogirriOverlay = L.imageOverlay('OGIRRI.tif', bounds);
     const ogtiltOverlay = L.imageOverlay('OGTILT.tif', bounds);
 
-    const ogirriData = new L.LeafletGeotiff('OGIRRI.tif', {
+    const ogirriData = new LeafletGeotiff('OGIRRI.tif', {
       band: 1,
       renderer: new L.LeafletGeotiffPlotty({
         colorScale: 'viridis',
@@ -81,7 +81,7 @@
       opacity: 0
     }).addTo(map);
 
-    const ogtiltData = new L.LeafletGeotiff('OGTILT.tif', {
+    const ogtiltData = new LeafletGeotiff('OGTILT.tif', {
       band: 1,
       renderer: new L.LeafletGeotiffPlotty({
         colorScale: 'viridis',
