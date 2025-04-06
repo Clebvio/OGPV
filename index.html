@@ -87,9 +87,14 @@
 
     function loadGeoTIFFLayer({ name, url, colorScale, ranges }) {
       fetch(url)
-        .then(r => r.arrayBuffer())
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP error ${r.status}`);
+          return r.arrayBuffer();
+        })
         .then(parseGeoraster)
         .then(georaster => {
+          console.log(`✅ Finished loading ${name} from ${url}`);
+
           const layer = new GeoRasterLayer({
             georaster,
             opacity: 0.85,
@@ -103,7 +108,7 @@
 
           layer._legend = ranges;
           layers[name] = layer;
-          
+
           if (layer && name) {
             console.log(`✅ Registering layer: ${name}`, layer);
             overlayControl.addOverlay(layer, name);
@@ -132,11 +137,11 @@
           });
         })
         .catch(err => {
-          console.error(`Failed to load layer "${name}" from ${url}`, err);
+          console.error(`❌ Failed to load "${name}" from ${url}`, err);
         });
     }
 
-    // OGTILT — Discrete bins from QGIS colormap
+    // OGTILT – Discrete color bins
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -178,7 +183,7 @@
       ]
     });
 
-    // OGIRRI — Interpolated
+    // OGIRRI – interpolated
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
