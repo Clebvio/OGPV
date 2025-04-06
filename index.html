@@ -108,17 +108,20 @@
 
           // Hover readout
           map.on('mousemove', function(e) {
-            if (!map.hasLayer(layer)) return;
-            layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-              if (val && val[0] != null) {
-                info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
-              } else {
-                info.innerHTML = "No data here…";
+            Object.entries(layers).forEach(([name, layer]) => {
+              if (!map.hasLayer(layer)) return;
+
+              if (typeof layer.getValueAtLatLng === 'function') {
+                layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+                  if (val && val[0] != null) {
+                    info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
+                  } else {
+                    info.innerHTML = "No data here…";
+                  }
+                });
               }
             });
           });
-        });
-    }
 
     const overlayControl = L.control.layers(null, {}).addTo(map);
 
