@@ -184,8 +184,12 @@
 
     // Layer switch hook
     map.on('overlayadd', function(e) {
-      updateLegend(e.name, e.name === "OGIRRI" ? layers["OGIRRI"]._legend : layers["OGTILT"]._legend);
+      const layer = layers[e.name];
+      if (layer && layer._legend) {
+        updateLegend(e.name, layer._legend);
+      }
     });
+          
   </script>
 </body>
 </html>
