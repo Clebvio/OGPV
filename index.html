@@ -43,12 +43,25 @@
       display: inline-block;
       margin-right: 6px;
     }
+    .progress {
+      position: absolute;
+      top: 20px;
+      right: 10px;
+      background: #333;
+      color: #eee;
+      padding: 8px 14px;
+      font-size: 14px;
+      border-radius: 5px;
+      z-index: 1000;
+      box-shadow: 0 0 10px rgba(0,0,0,0.4);
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
+  <div class="progress" id="progress">Loading map layers...</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
@@ -71,8 +84,11 @@
 
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
+    const progressBox = document.getElementById('progress');
     const layers = {};
     const overlayControl = L.control.layers(null, {}).addTo(map);
+    let layersLoaded = 0;
+    const totalLayers = 2;
 
     L.Control.geocoder({ defaultMarkGeocode: true })
       .on('markgeocode', function (e) {
@@ -93,7 +109,7 @@
         })
         .then(parseGeoraster)
         .then(georaster => {
-          console.log(`✅ Finished loading ${name} from ${url}`);
+          progressBox.innerText = `✅ Loaded "${name}"`;
 
           const layer = new GeoRasterLayer({
             georaster,
@@ -110,8 +126,8 @@
           layers[name] = layer;
 
           if (layer && name) {
-            console.log(`✅ Registering layer: ${name}`, layer);
             overlayControl.addOverlay(layer, name);
+            console.log(`✅ Registered: ${name}`);
           } else {
             console.warn(`⚠️ Skipping invalid layer: ${name}`, layer);
           }
@@ -119,6 +135,12 @@
           if (Object.keys(layers).length === 1) {
             map.addLayer(layer);
             updateLegend(name, ranges);
+          }
+
+          layersLoaded++;
+          if (layersLoaded === totalLayers) {
+            progressBox.innerText = "✅ All layers loaded";
+            setTimeout(() => progressBox.style.display = "none", 1500);
           }
 
           map.on('mousemove', function (e) {
@@ -138,10 +160,11 @@
         })
         .catch(err => {
           console.error(`❌ Failed to load "${name}" from ${url}`, err);
+          progressBox.innerText = `❌ Failed to load "${name}"`;
         });
     }
 
-    // OGTILT – Discrete color bins
+    // OGTILT layer
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -183,7 +206,7 @@
       ]
     });
 
-    // OGIRRI – interpolated
+    // OGIRRI layer
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
