@@ -47,8 +47,7 @@
   <div class="info" id="info">Hover over the map to see values...</div>
   <div class="legend" id="legend"></div>
 
-  <!-- ✅ Correct and working scripts -->
-<!-- Scripts (local versions in root OGPV folder) -->
+  <!-- Scripts -->
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script src="geotiff.browser.min.js"></script>
   <script src="plotty.min.js"></script>
@@ -56,12 +55,9 @@
   <script src="leaflet-geotiff-plotty.min.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
-
-
   <script>
     const map = L.map('map').setView([51, -96], 4);
 
-    // Base map
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
@@ -73,15 +69,16 @@
     const ogirriOverlay = L.imageOverlay('OGIRRI.tif', bounds);
     const ogtiltOverlay = L.imageOverlay('OGTILT.tif', bounds);
 
+    // ✅ Use global renderer directly
     const ogirriData = new L.LeafletGeotiff('OGIRRI.tif', {
       band: 1,
-      renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' }),
+      renderer: new LeafletGeotiffPlotty({ colorScale: 'viridis' }),
       opacity: 0
     }).addTo(map);
 
     const ogtiltData = new L.LeafletGeotiff('OGTILT.tif', {
       band: 1,
-      renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' }),
+      renderer: new LeafletGeotiffPlotty({ colorScale: 'viridis' }),
       opacity: 0
     });
 
@@ -93,7 +90,6 @@
         : "No data here...";
     });
 
-    // Address search
     L.Control.geocoder({
       defaultMarkGeocode: true
     }).on('markgeocode', function(e) {
