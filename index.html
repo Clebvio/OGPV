@@ -13,47 +13,24 @@
       padding: 0;
       font-family: Arial, sans-serif;
     }
-    .info {
+    .info, .legend, .progress {
       position: absolute;
-      bottom: 20px;
-      left: 10px;
       background: #222;
       color: #eee;
       padding: 8px 14px;
-      border-radius: 4px;
-      font-size: 14px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.5);
-      z-index: 1000;
-    }
-    .legend {
-      position: absolute;
-      bottom: 20px;
-      right: 10px;
-      background: #222;
-      color: #eee;
-      padding: 10px;
-      font-size: 12px;
       border-radius: 5px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      font-size: 13px;
       z-index: 1000;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
     }
+    .info { bottom: 20px; left: 10px; }
+    .legend { bottom: 20px; right: 10px; }
+    .progress { top: 20px; right: 10px; }
     .legend-color {
       width: 20px;
       height: 12px;
       display: inline-block;
       margin-right: 6px;
-    }
-    .progress {
-      position: absolute;
-      top: 20px;
-      right: 10px;
-      background: #333;
-      color: #eee;
-      padding: 8px 14px;
-      font-size: 14px;
-      border-radius: 5px;
-      z-index: 1000;
-      box-shadow: 0 0 10px rgba(0,0,0,0.4);
     }
   </style>
 </head>
@@ -70,18 +47,6 @@
 
   <script>
     const map = L.map('map').setView([51, -96], 4);
-
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://carto.com/">Carto</a>',
-      subdomains: 'abcd',
-      maxZoom: 19
-    }).addTo(map);
-
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
-      maxZoom: 20
-    }).addTo(map);
-
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
     const progressBox = document.getElementById('progress');
@@ -90,11 +55,24 @@
     let layersLoaded = 0;
     const totalLayers = 2;
 
+    // Dark base map with labels
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; Carto',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      maxZoom: 20
+    }).addTo(map);
+
+    // Geocoder
     L.Control.geocoder({ defaultMarkGeocode: true })
       .on('markgeocode', function (e) {
         map.setView(e.geocode.center, 12);
       }).addTo(map);
 
+    // Utility
     function updateLegend(title, ranges) {
       legend.innerHTML = `<strong>${title}</strong><br>` + ranges.map(r => `
         <div><span class="legend-color" style="background:${r.color}"></span>${r.label}</div>
@@ -103,10 +81,7 @@
 
     function loadGeoTIFFLayer({ name, url, colorScale, ranges }) {
       fetch(url)
-        .then(r => {
-          if (!r.ok) throw new Error(`HTTP error ${r.status}`);
-          return r.arrayBuffer();
-        })
+        .then(r => r.arrayBuffer())
         .then(parseGeoraster)
         .then(georaster => {
           progressBox.innerText = `✅ Loaded "${name}"`;
@@ -124,13 +99,7 @@
 
           layer._legend = ranges;
           layers[name] = layer;
-
-          if (layer && name) {
-            overlayControl.addOverlay(layer, name);
-            console.log(`✅ Registered: ${name}`);
-          } else {
-            console.warn(`⚠️ Skipping invalid layer: ${name}`, layer);
-          }
+          overlayControl.addOverlay(layer, name);
 
           if (Object.keys(layers).length === 1) {
             map.addLayer(layer);
@@ -159,15 +128,15 @@
           });
         })
         .catch(err => {
-          console.error(`❌ Failed to load "${name}" from ${url}`, err);
+          console.error(`❌ Failed to load "${name}"`, err);
           progressBox.innerText = `❌ Failed to load "${name}"`;
         });
     }
 
-    // OGTILT layer
+    // OGTILT_clean.tif layer
     loadGeoTIFFLayer({
       name: "OGTILT",
-      url: "https://clebvio.github.io/OGPV/OGTILT.tif",
+      url: "https://clebvio.github.io/OGPV/OGTILT_clean.tif",
       colorScale: val => {
         if (val <= 30.625) return "rgba(48,18,59,1)";
         if (val <= 32.25) return "rgba(65,67,167,1)";
@@ -206,11 +175,10 @@
       ]
     });
 
-    // OGIRRI layer
-    console.log("🚀 Attempting to load OGIRRI...");
+    // OGIRRI_clean.tif layer
     loadGeoTIFFLayer({
       name: "OGIRRI",
-      url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
+      url: "https://clebvio.github.io/OGPV/OGIRRI_clean.tif",
       colorScale: val => {
         if (val <= 800) return "rgba(255,255,255,1)";
         if (val <= 923.07) return "rgba(25,25,25,1)";
