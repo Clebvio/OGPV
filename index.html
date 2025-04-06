@@ -75,10 +75,9 @@
       `).join('');
     }
 
-    // Store layers
     const layers = {};
+    const overlayControl = L.control.layers(null, {}).addTo(map);
 
-    // Load a single GeoTIFF file
     function loadGeoTIFFLayer({ name, url, colorScale, ranges, valueMin, valueMax }) {
       fetch(url)
         .then(r => r.arrayBuffer())
@@ -96,17 +95,10 @@
             }
           });
 
-  layer._legend = ranges; // ✅ <-- THIS LINE
-
-  // Continue registering it for switching...
-  layers[name] = layer;
-  overlayControl.addOverlay(layer, name);
-
-          // Register for overlay control
+          layer._legend = ranges;
           layers[name] = layer;
           overlayControl.addOverlay(layer, name);
 
-          // Show the first one immediately
           if (Object.keys(layers).length === 1) {
             map.addLayer(layer);
             updateLegend(name, ranges);
@@ -114,13 +106,13 @@
 
           // Hover readout
           map.on('mousemove', function(e) {
-            Object.entries(layers).forEach(([name, layer]) => {
-              if (!map.hasLayer(layer)) return;
+            Object.entries(layers).forEach(([layerName, layerObj]) => {
+              if (!map.hasLayer(layerObj)) return;
 
-              if (typeof layer.getValueAtLatLng === 'function') {
-                layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+              if (typeof layerObj.getValueAtLatLng === 'function') {
+                layerObj.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
                   if (val && val[0] != null) {
-                    info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
+                    info.innerHTML = `${layerName}: <strong>${val[0].toFixed(2)}</strong>`;
                   } else {
                     info.innerHTML = "No data here…";
                   }
@@ -128,10 +120,10 @@
               }
             });
           });
+        });
+    }
 
-    const overlayControl = L.control.layers(null, {}).addTo(map);
-
-    // OGIRRI setup
+    // OGIRRI
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -157,7 +149,7 @@
       ]
     });
 
-    // OGTILT setup
+    // OGTILT
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -188,14 +180,13 @@
       ]
     });
 
-    // Layer switch hook
+    // Legend update on layer switch
     map.on('overlayadd', function(e) {
       const layer = layers[e.name];
       if (layer && layer._legend) {
         updateLegend(e.name, layer._legend);
       }
-    }); 
-          
+    });
   </script>
 </body>
 </html>
