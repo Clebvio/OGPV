@@ -96,6 +96,13 @@
             }
           });
 
+  layer._legend = ranges; // ✅ <-- THIS LINE
+
+  // Continue registering it for switching...
+  layers[name] = layer;
+  overlayControl.addOverlay(layer, name);
+  ...
+
           // Register for overlay control
           layers[name] = layer;
           overlayControl.addOverlay(layer, name);
