@@ -103,7 +103,13 @@
 
           layer._legend = ranges;
           layers[name] = layer;
-          overlayControl.addOverlay(layer, name);
+          
+          if (layer && name) {
+            console.log(`✅ Registering layer: ${name}`, layer);
+            overlayControl.addOverlay(layer, name);
+          } else {
+            console.warn(`⚠️ Skipping invalid layer: ${name}`, layer);
+          }
 
           if (Object.keys(layers).length === 1) {
             map.addLayer(layer);
