@@ -45,20 +45,16 @@
 <body>
   <div id="map"></div>
   <div class="info" id="info">Hover over the map to see values…</div>
-  <div class="legend" id="legend"></div>
+  <div class="legend" id="legend">Legend will load with data layer.</div>
 
-  <!-- Leaflet -->
+  <!-- Leaflet & GeoTIFF Support -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Address search -->
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-  <!-- GeoRaster support -->
   <script src="https://unpkg.com/georaster"></script>
   <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
 
   <script>
     const map = L.map('map').setView([51, -96], 4);
-
-    // Base map
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
@@ -66,92 +62,82 @@
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
 
-    // Address search bar
+    // Add search
     L.Control.geocoder({ defaultMarkGeocode: true })
       .on('markgeocode', function(e) {
         map.setView(e.geocode.center, 12);
       }).addTo(map);
 
-    const tiffLayers = {};
-
-    // Color scale for OGIRRI
-    function getColorForOGIRRI(value) {
-      if (value <= 923) return "#191919";
-      if (value <= 1170) return "#4e4e4e";
-      if (value <= 1279) return "#6a6a6a";
-      if (value <= 1425) return "#7cd2e1";
-      if (value <= 1490) return "#93e9e7";
-      if (value <= 1588) return "#c7f7c6";
-      return "#f8ff8a";
+    // Utility for layer legend
+    function updateLegend(title, ranges) {
+      legend.innerHTML = `<strong>${title}</strong><br>` + ranges.map(r => `
+        <div><span class="legend-color" style="background:${r.color}"></span>${r.label}</div>
+      `).join('');
     }
 
-    // Color scale for OGTILT
-    function getColorForOGTILT(value) {
-      if (value <= 32) return "#30123b";
-      if (value <= 34) return "#4143a7";
-      if (value <= 36) return "#3e9cfe";
-      if (value <= 38) return "#21c6e1";
-      if (value <= 40) return "#48f882";
-      if (value <= 42) return "#bbf534";
-      if (value <= 44) return "#fbb938";
-      if (value <= 46) return "#ef5911";
-      if (value <= 48) return "#d43305";
-      return "#7a0403";
-    }
+    // Store layers
+    const layers = {};
 
-    function loadGeoTiff(url, id, colorFn, legendSteps) {
+    // Load a single GeoTIFF file
+    function loadGeoTIFFLayer({ name, url, colorScale, ranges, valueMin, valueMax }) {
       fetch(url)
-        .then(res => res.arrayBuffer())
-        .then(arrayBuffer => parseGeoraster(arrayBuffer))
+        .then(r => r.arrayBuffer())
+        .then(parseGeoraster)
         .then(georaster => {
           const layer = new GeoRasterLayer({
             georaster,
             opacity: 0.8,
-            pixelValuesToColorFn: (values) => {
-              const val = values[0];
-              return val ? colorFn(val) : null;
-            },
-            resolution: 256
+            resolution: 256,
+            pixelValuesToColorFn: values => {
+              const v = values[0];
+              if (v == null) return null;
+              if (v < valueMin || v > valueMax) return null;
+              return colorScale(v);
+            }
           });
 
-          tiffLayers[id] = layer;
-          map.addLayer(layer);
-          map.fitBounds(layer.getBounds());
+          // Register for overlay control
+          layers[name] = layer;
+          overlayControl.addOverlay(layer, name);
+
+          // Show the first one immediately
+          if (Object.keys(layers).length === 1) {
+            map.addLayer(layer);
+            updateLegend(name, ranges);
+          }
 
           // Hover readout
           map.on('mousemove', function(e) {
-            const { lat, lng } = e.latlng;
-            layer.getValueAtLatLng(lat, lng).then(val => {
-              if (val && val[0] !== null) {
-                info.innerHTML = `${id} value: <strong>${val[0].toFixed(2)}</strong>`;
+            if (!map.hasLayer(layer)) return;
+            layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+              if (val && val[0] != null) {
+                info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
               } else {
                 info.innerHTML = "No data here…";
               }
             });
           });
-
-          // Legend
-          legend.innerHTML = legendSteps.map(s => `
-            <div><span class="legend-color" style="background:${s.color}"></span>${s.label}</div>
-          `).join('');
         });
     }
 
-    // Add layer switcher
-    const baseMaps = {};
-    const overlayMaps = {
-      "OGIRRI": L.layerGroup(),
-      "OGTILT": L.layerGroup()
-    };
+    const overlayControl = L.control.layers(null, {}).addTo(map);
 
-    L.control.layers(baseMaps, overlayMaps).addTo(map);
-
-    // Load OGIRRI
-    loadGeoTiff(
-      'https://clebvio.github.io/OGPV/OGIRRI.tif',
-      'OGIRRI',
-      getColorForOGIRRI,
-      [
+    // OGIRRI setup
+    loadGeoTIFFLayer({
+      name: "OGIRRI",
+      url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
+      valueMin: 800,
+      valueMax: 1600,
+      colorScale: val => {
+        if (val < 923) return "#191919";
+        if (val < 1170) return "#4e4e4e";
+        if (val < 1279) return "#6a6a6a";
+        if (val < 1425) return "#7cd2e1";
+        if (val < 1490) return "#93e9e7";
+        if (val < 1588) return "#c7f7c6";
+        return "#f8ff8a";
+      },
+      ranges: [
         { label: "≤ 923", color: "#191919" },
         { label: "≤ 1170", color: "#4e4e4e" },
         { label: "≤ 1279", color: "#6a6a6a" },
@@ -160,14 +146,27 @@
         { label: "≤ 1588", color: "#c7f7c6" },
         { label: "> 1588", color: "#f8ff8a" }
       ]
-    );
+    });
 
-    // Load OGTILT
-    loadGeoTiff(
-      'https://clebvio.github.io/OGPV/OGTILT.tif',
-      'OGTILT',
-      getColorForOGTILT,
-      [
+    // OGTILT setup
+    loadGeoTIFFLayer({
+      name: "OGTILT",
+      url: "https://clebvio.github.io/OGPV/OGTILT.tif",
+      valueMin: 30,
+      valueMax: 54,
+      colorScale: val => {
+        if (val < 32) return "#30123b";
+        if (val < 34) return "#4143a7";
+        if (val < 36) return "#3e9cfe";
+        if (val < 38) return "#21c6e1";
+        if (val < 40) return "#48f882";
+        if (val < 42) return "#bbf534";
+        if (val < 44) return "#fbb938";
+        if (val < 46) return "#ef5911";
+        if (val < 48) return "#d43305";
+        return "#7a0403";
+      },
+      ranges: [
         { label: "≤ 32", color: "#30123b" },
         { label: "≤ 34", color: "#4143a7" },
         { label: "≤ 36", color: "#3e9cfe" },
@@ -178,7 +177,12 @@
         { label: "≤ 46", color: "#ef5911" },
         { label: "> 48", color: "#7a0403" }
       ]
-    );
+    });
+
+    // Layer switch hook
+    map.on('overlayadd', function(e) {
+      updateLegend(e.name, e.name === "OGIRRI" ? layers["OGIRRI"]._legend : layers["OGTILT"]._legend);
+    });
   </script>
 </body>
 </html>
