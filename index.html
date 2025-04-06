@@ -11,27 +11,30 @@
       height: 100%;
       margin: 0;
       padding: 0;
+      font-family: Arial, sans-serif;
     }
     .info {
       position: absolute;
       bottom: 20px;
       left: 10px;
-      background: white;
-      padding: 6px 12px;
+      background: #222;
+      color: #eee;
+      padding: 8px 14px;
       border-radius: 4px;
       font-size: 14px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
       z-index: 1000;
     }
     .legend {
       position: absolute;
       bottom: 20px;
       right: 10px;
-      background: white;
+      background: #222;
+      color: #eee;
       padding: 10px;
       font-size: 12px;
       border-radius: 5px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
       z-index: 1000;
     }
     .legend-color {
@@ -54,13 +57,27 @@
 
   <script>
     const map = L.map('map').setView([51, -96], 4);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+
+    // Dark basemap
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/">Carto</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    // Add city name overlay
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      maxZoom: 20,
+      pane: 'overlayPane'
     }).addTo(map);
 
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
+    const layers = {};
+    const overlayControl = L.control.layers(null, {}).addTo(map);
 
+    // Address search
     L.Control.geocoder({ defaultMarkGeocode: true })
       .on('markgeocode', function (e) {
         map.setView(e.geocode.center, 12);
@@ -72,9 +89,6 @@
       `).join('');
     }
 
-    const layers = {};
-    const overlayControl = L.control.layers(null, {}).addTo(map);
-
     function loadGeoTIFFLayer({ name, url, colorScale, ranges, valueMin, valueMax }) {
       fetch(url)
         .then(r => r.arrayBuffer())
@@ -82,12 +96,11 @@
         .then(georaster => {
           const layer = new GeoRasterLayer({
             georaster,
-            opacity: 0.8,
+            opacity: 0.85,
             resolution: 256,
             pixelValuesToColorFn: values => {
               const v = values[0];
               if (v == null) return null;
-              if (v < valueMin || v > valueMax) return null;
               return colorScale(v);
             }
           });
@@ -104,7 +117,6 @@
           map.on('mousemove', function (e) {
             Object.entries(layers).forEach(([layerName, layerObj]) => {
               if (!map.hasLayer(layerObj)) return;
-
               if (typeof layerObj.getValueAtLatLng === 'function') {
                 layerObj.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
                   if (val && val[0] != null) {
@@ -119,11 +131,12 @@
         });
     }
 
+    // Load OGIRRI layer
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
       valueMin: 800,
-      valueMax: 1619.15,
+      valueMax: 1600,
       colorScale: val => {
         if (val <= 800) return "rgba(255,255,255,1)";
         if (val <= 923.07) return "rgba(25,25,25,1)";
@@ -146,11 +159,12 @@
       ]
     });
 
+    // Load OGTILT layer
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
-      valueMin: 30,
-      valueMax: 54,
+      valueMin: 29,
+      valueMax: 55,
       colorScale: val => {
         if (val <= 30.625) return "rgba(48,18,59,1)";
         if (val <= 32.25) return "rgba(65,67,167,1)";
@@ -189,6 +203,7 @@
       ]
     });
 
+    // Update legend when layer toggled
     map.on('overlayadd', function (e) {
       const layer = layers[e.name];
       if (layer && layer._legend) {
