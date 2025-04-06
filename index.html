@@ -2,12 +2,15 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Solar Resource Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solar Resource Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder@1.13.0/dist/Control.Geocoder.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; }
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+    }
     .info {
       position: absolute;
       bottom: 20px;
@@ -19,81 +22,158 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.2);
       z-index: 1000;
     }
+    .legend {
+      position: absolute;
+      bottom: 20px;
+      right: 10px;
+      background: white;
+      padding: 10px;
+      font-size: 12px;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      line-height: 1.4;
+      z-index: 1000;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+    }
+    .legend-color {
+      width: 16px;
+      height: 12px;
+      margin-right: 6px;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="info" id="info">Hover over the map to see solar irradiance...</div>
+  <div class="info" id="info">Hover over the map to see values...</div>
+  <div class="legend" id="legend"></div>
 
-  <!-- ✅ Script Order (important) -->
+  <!-- Scripts -->
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/geotiff@1.0.0-beta.6/dist/geotiff.browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/plotty@0.4.0/build/plotty.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/stuartmatthews/leaflet-geotiff@v2.0.7/dist/leaflet-geotiff.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/stuartmatthews/leaflet-geotiff@v2.0.7/dist/leaflet-geotiff-plotty.min.js"></script>
-  <script src="https://unpkg.com/leaflet-control-geocoder@1.13.0/dist/Control.Geocoder.js"></script>
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
   <script>
-    window.onload = function () {
-      const map = L.map('map').setView([39.5, -98.35], 5);
+    const map = L.map('map').setView([51, -96], 4);
 
-      // Base Map
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
+    // Base Map
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-      const info = document.getElementById('info');
+    // Info
+    const info = document.getElementById('info');
+    const legend = document.getElementById('legend');
 
-      // Load the GeoTIFF with Plotty renderer
-      const tiffLayer = new L.LeafletGeotiff('irri.tif', {
-        band: 0,
-        name: 'Solar Irradiance',
-        displayMin: 0,
-        displayMax: 1000,
-        clampLow: false,
-        clampHigh: false,
-        renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' })
-      }).addTo(map);
+    // Image bounds
+    const bounds = [[41, -140], [61, -52]];
 
-      // Show irradiance on click
-      map.on('click', function (e) {
-        const value = tiffLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
-        info.innerHTML = value !== null
-          ? `Solar Irradiance: <strong>${value.toFixed(2)} W/m²</strong> @ (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`
-          : "No data at this location.";
-      });
+    // Overlays
+    const ogirriOverlay = L.imageOverlay('OGIRRI.tif', bounds);
+    const ogtiltOverlay = L.imageOverlay('OGTILT.tif', bounds);
 
-      // Show irradiance on hover
-      map.on('mousemove', function (e) {
-        const value = tiffLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
-        info.innerHTML = value !== null
-          ? `Solar Irradiance: <strong>${value.toFixed(2)} W/m²</strong>`
-          : "No data here...";
-      });
+    // Data-only layers for probing
+    const ogirriData = new L.LeafletGeotiff('OGIRRI.tif', {
+      band: 1,
+      renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' }),
+      opacity: 0
+    }).addTo(map);
 
-      // Address search bar
-      L.Control.geocoder({
-        defaultMarkGeocode: true
-      })
-      .on('markgeocode', function(e) {
-        const center = e.geocode.center;
-        map.setView(center, 13);
-      })
-      .addTo(map);
+    const ogtiltData = new L.LeafletGeotiff('OGTILT.tif', {
+      band: 1,
+      renderer: new L.LeafletGeotiff.Plotty({ colorScale: 'viridis' }),
+      opacity: 0
+    });
 
-      // Example customer markers
-      const customers = [
-        { name: "Customer A", lat: 34.0522, lng: -118.2437 },
-        { name: "Customer B", lat: 36.7783, lng: -119.4179 },
-        { name: "Customer C", lat: 37.7749, lng: -122.4194 }
-      ];
+    // Hover value readout
+    map.on('mousemove', function (e) {
+      const active = map.hasLayer(ogirriData) ? ogirriData : ogtiltData;
+      const value = active.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
+      info.innerHTML = value !== null
+        ? `Value: <strong>${value.toFixed(2)}</strong>`
+        : "No data here...";
+    });
 
-      customers.forEach(c => {
-        L.marker([c.lat, c.lng])
-          .addTo(map)
-          .bindPopup(`<strong>${c.name}</strong>`);
-      });
+    // Address search
+    L.Control.geocoder({
+      defaultMarkGeocode: true
+    }).on('markgeocode', function(e) {
+      map.setView(e.geocode.center, 13);
+    }).addTo(map);
+
+    // Legends
+    const ogirriLegend = [
+      { value: 800, color: "#ffffff" },
+      { value: 923.07, color: "#191919" },
+      { value: 1170.19, color: "#4e4e4e" },
+      { value: 1279.48, color: "#6a6a6a" },
+      { value: 1425.19, color: "#7cd2e1" },
+      { value: 1490.18, color: "#93e9e7" },
+      { value: 1588.63, color: "#c7f7c6" },
+      { value: 1619.15, color: "#f8ff8a" }
+    ];
+
+    const ogtiltLegend = [
+      { value: 30.625, color: "#30123b" },
+      { value: 32.25, color: "#4143a7" },
+      { value: 33.875, color: "#4771e9" },
+      { value: 35.5, color: "#3e9cfe" },
+      { value: 37.125, color: "#21c6e1" },
+      { value: 38.75, color: "#1de5b5" },
+      { value: 40.375, color: "#48f882" },
+      { value: 42, color: "#89ff4d" },
+      { value: 43.625, color: "#bbf534" },
+      { value: 45.25, color: "#e2dc38" },
+      { value: 46.875, color: "#fbb938" },
+      { value: 48.5, color: "#fd8b26" },
+      { value: 50.125, color: "#ef5911" },
+      { value: 51.75, color: "#d43305" },
+      { value: 53.375, color: "#ac1701" },
+      { value: 54, color: "#7a0403" }
+    ];
+
+    function updateLegend(data) {
+      legend.innerHTML = '';
+      const list = data.map(item => `
+        <div class="legend-item">
+          <div class="legend-color" style="background:${item.color}"></div>
+          <div>${item.value}</div>
+        </div>`).join('');
+      legend.innerHTML = list;
+    }
+
+    // Set up layer toggle and legends
+    const overlays = {
+      "OGIRRI Layer": ogirriOverlay,
+      "OGTILT Layer": ogtiltOverlay
     };
+
+    const control = L.control.layers(null, overlays).addTo(map);
+    ogirriOverlay.addTo(map);
+    updateLegend(ogirriLegend);
+
+    control.on('overlayadd', function (e) {
+      if (e.name === "OGIRRI Layer") {
+        map.addLayer(ogirriData);
+        map.removeLayer(ogtiltData);
+        updateLegend(ogirriLegend);
+      } else if (e.name === "OGTILT Layer") {
+        map.addLayer(ogtiltData);
+        map.removeLayer(ogirriData);
+        updateLegend(ogtiltLegend);
+      }
+    });
+
+    control.on('overlayremove', function (e) {
+      if (e.name === "OGIRRI Layer") map.removeLayer(ogirriData);
+      if (e.name === "OGTILT Layer") map.removeLayer(ogtiltData);
+    });
   </script>
 </body>
 </html>
+
