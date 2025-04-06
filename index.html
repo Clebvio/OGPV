@@ -58,14 +58,12 @@
   <script>
     const map = L.map('map').setView([51, -96], 4);
 
-    // Dark basemap
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; <a href="https://carto.com/">Carto</a>',
       subdomains: 'abcd',
       maxZoom: 19
     }).addTo(map);
 
-    // Overlay with labels
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
       subdomains: 'abcd',
       maxZoom: 20
@@ -76,7 +74,6 @@
     const layers = {};
     const overlayControl = L.control.layers(null, {}).addTo(map);
 
-    // Address search
     L.Control.geocoder({ defaultMarkGeocode: true })
       .on('markgeocode', function (e) {
         map.setView(e.geocode.center, 12);
@@ -108,7 +105,6 @@
           layers[name] = layer;
           overlayControl.addOverlay(layer, name);
 
-          // Show first layer by default
           if (Object.keys(layers).length === 1) {
             map.addLayer(layer);
             updateLegend(name, ranges);
@@ -134,49 +130,49 @@
         });
     }
 
-    // 🔁 Reversed color scale for OGTILT
+    // OGTILT — Discrete bins from QGIS colormap
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
       colorScale: val => {
-        if (val <= 30.625) return "rgba(122,4,3,1)";
-        if (val <= 32.25)  return "rgba(172,23,1,1)";
-        if (val <= 33.875) return "rgba(212,51,5,1)";
-        if (val <= 35.5)   return "rgba(239,89,17,1)";
-        if (val <= 37.125) return "rgba(253,139,38,1)";
-        if (val <= 38.75)  return "rgba(251,185,56,1)";
-        if (val <= 40.375) return "rgba(226,220,56,1)";
-        if (val <= 42)     return "rgba(187,245,52,1)";
-        if (val <= 43.625) return "rgba(137,255,77,1)";
-        if (val <= 45.25)  return "rgba(72,248,130,1)";
-        if (val <= 46.875) return "rgba(27,229,181,1)";
-        if (val <= 48.5)   return "rgba(33,198,225,1)";
-        if (val <= 50.125) return "rgba(62,156,254,1)";
-        if (val <= 51.75)  return "rgba(71,113,233,1)";
-        if (val <= 53.375) return "rgba(65,67,167,1)";
-        return "rgba(48,18,59,1)";
+        if (val <= 30.625) return "rgba(48,18,59,1)";
+        if (val <= 32.25) return "rgba(65,67,167,1)";
+        if (val <= 33.875) return "rgba(71,113,233,1)";
+        if (val <= 35.5) return "rgba(62,156,254,1)";
+        if (val <= 37.125) return "rgba(33,198,225,1)";
+        if (val <= 38.75) return "rgba(27,229,181,1)";
+        if (val <= 40.375) return "rgba(72,248,130,1)";
+        if (val <= 42) return "rgba(137,255,77,1)";
+        if (val <= 43.625) return "rgba(187,245,52,1)";
+        if (val <= 45.25) return "rgba(226,220,56,1)";
+        if (val <= 46.875) return "rgba(251,185,56,1)";
+        if (val <= 48.5) return "rgba(253,139,38,1)";
+        if (val <= 50.125) return "rgba(239,89,17,1)";
+        if (val <= 51.75) return "rgba(212,51,5,1)";
+        if (val <= 53.375) return "rgba(172,23,1,1)";
+        return "rgba(122,4,3,1)";
       },
       ranges: [
-        { label: "≤ 31", color: "rgba(122,4,3,1)" },
-        { label: "31–32", color: "rgba(172,23,1,1)" },
-        { label: "32–34", color: "rgba(212,51,5,1)" },
-        { label: "34–36", color: "rgba(239,89,17,1)" },
-        { label: "36–37", color: "rgba(253,139,38,1)" },
-        { label: "37–39", color: "rgba(251,185,56,1)" },
-        { label: "39–40", color: "rgba(226,220,56,1)" },
-        { label: "40–42", color: "rgba(187,245,52,1)" },
-        { label: "42–44", color: "rgba(137,255,77,1)" },
-        { label: "44–45", color: "rgba(72,248,130,1)" },
-        { label: "45–47", color: "rgba(27,229,181,1)" },
-        { label: "47–49", color: "rgba(33,198,225,1)" },
-        { label: "49–50", color: "rgba(62,156,254,1)" },
-        { label: "50–52", color: "rgba(71,113,233,1)" },
-        { label: "52–53", color: "rgba(65,67,167,1)" },
-        { label: "> 53", color: "rgba(48,18,59,1)" }
+        { label: "≤ 31", color: "rgba(48,18,59,1)" },
+        { label: "31–32", color: "rgba(65,67,167,1)" },
+        { label: "32–34", color: "rgba(71,113,233,1)" },
+        { label: "34–36", color: "rgba(62,156,254,1)" },
+        { label: "36–37", color: "rgba(33,198,225,1)" },
+        { label: "37–39", color: "rgba(27,229,181,1)" },
+        { label: "39–40", color: "rgba(72,248,130,1)" },
+        { label: "40–42", color: "rgba(137,255,77,1)" },
+        { label: "42–44", color: "rgba(187,245,52,1)" },
+        { label: "44–45", color: "rgba(226,220,56,1)" },
+        { label: "45–47", color: "rgba(251,185,56,1)" },
+        { label: "47–49", color: "rgba(253,139,38,1)" },
+        { label: "49–50", color: "rgba(239,89,17,1)" },
+        { label: "50–52", color: "rgba(212,51,5,1)" },
+        { label: "52–53", color: "rgba(172,23,1,1)" },
+        { label: "> 53", color: "rgba(122,4,3,1)" }
       ]
     });
 
-    // ✅ OGIRRI with actual value ranges
+    // OGIRRI — Interpolated
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
