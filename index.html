@@ -72,7 +72,10 @@
     const ogtiltOverlay = L.imageOverlay('OGTILT.tif', bounds);
 
     // ✅ Fix Plotty assignment
-    L.LeafletGeotiff.Plotty = L.LeafletGeotiff?.Plotty || window.LeafletGeotiff?.PlottyRenderer || window.PlottyRenderer || undefined;
+    if (window.L && L.LeafletGeotiff && !L.LeafletGeotiff.Plotty && window.LeafletGeotiff_Plotty) {
+      L.LeafletGeotiff.Plotty = window.LeafletGeotiff_Plotty;
+    }
+
 
     const ogirriData = new L.LeafletGeotiff('OGIRRI.tif', {
       band: 1,
