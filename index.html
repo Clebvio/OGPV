@@ -2,12 +2,16 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Solar Resource Viewer</title>
+  <title>Solar Resource Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; }
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
     .info {
       position: absolute;
       bottom: 20px;
@@ -28,148 +32,153 @@
       font-size: 12px;
       border-radius: 5px;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
-      line-height: 1.4;
       z-index: 1000;
     }
-    .legend-item {
-      display: flex;
-      align-items: center;
-    }
     .legend-color {
-      width: 16px;
+      width: 20px;
       height: 12px;
+      display: inline-block;
       margin-right: 6px;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="info" id="info">Hover over the map to see values...</div>
+  <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend"></div>
 
-  <!-- ✅ All dependencies via CDN (Leaflet 1.9.4 + leaflet-geotiff-2) -->
+  <!-- Leaflet -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/geotiff@1.0.0-beta.6/dist/geotiff.browser.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/plotty@0.4.0/build/plotty.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet-geotiff-2@1.1.0/dist/leaflet-geotiff.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet-geotiff-2@1.1.0/dist/leaflet-geotiff-plotty.min.js"></script>
+  <!-- Address search -->
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+  <!-- GeoRaster support -->
+  <script src="https://unpkg.com/georaster"></script>
+  <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
 
   <script>
     const map = L.map('map').setView([51, -96], 4);
 
+    // Base map
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
-    const bounds = [[41, -140], [61, -52]];
 
-    const ogirriOverlay = L.imageOverlay('OGIRRI.tif', bounds);
-    const ogtiltOverlay = L.imageOverlay('OGTILT.tif', bounds);
+    // Address search bar
+    L.Control.geocoder({ defaultMarkGeocode: true })
+      .on('markgeocode', function(e) {
+        map.setView(e.geocode.center, 12);
+      }).addTo(map);
 
-    const ogirriData = new LeafletGeotiff('OGIRRI.tif', {
-      band: 1,
-      renderer: new L.LeafletGeotiffPlotty({
-        colorScale: 'viridis',
-        displayMin: 800,
-        displayMax: 1600,
-        clampLow: true,
-        clampHigh: true
-      }),
-      opacity: 0
-    }).addTo(map);
+    const tiffLayers = {};
 
-    const ogtiltData = new LeafletGeotiff('OGTILT.tif', {
-      band: 1,
-      renderer: new L.LeafletGeotiffPlotty({
-        colorScale: 'viridis',
-        displayMin: 30,
-        displayMax: 54,
-        clampLow: true,
-        clampHigh: true
-      }),
-      opacity: 0
-    });
-
-    map.on('mousemove', function (e) {
-      const active = map.hasLayer(ogirriOverlay) ? ogirriData : ogtiltData;
-      const value = active.getValueAtLatLng(e.latlng.lat, e.latlng.lng);
-      info.innerHTML = value !== null
-        ? `Value: <strong>${value.toFixed(2)}</strong>`
-        : "No data here...";
-    });
-
-    L.Control.geocoder({
-      defaultMarkGeocode: true
-    }).on('markgeocode', function(e) {
-      map.setView(e.geocode.center, 13);
-    }).addTo(map);
-
-    const ogirriLegend = [
-      { value: 800, color: "#ffffff" },
-      { value: 923.07, color: "#191919" },
-      { value: 1170.19, color: "#4e4e4e" },
-      { value: 1279.48, color: "#6a6a6a" },
-      { value: 1425.19, color: "#7cd2e1" },
-      { value: 1490.18, color: "#93e9e7" },
-      { value: 1588.63, color: "#c7f7c6" },
-      { value: 1619.15, color: "#f8ff8a" }
-    ];
-
-    const ogtiltLegend = [
-      { value: 30.625, color: "#30123b" },
-      { value: 32.25, color: "#4143a7" },
-      { value: 33.875, color: "#4771e9" },
-      { value: 35.5, color: "#3e9cfe" },
-      { value: 37.125, color: "#21c6e1" },
-      { value: 38.75, color: "#1de5b5" },
-      { value: 40.375, color: "#48f882" },
-      { value: 42, color: "#89ff4d" },
-      { value: 43.625, color: "#bbf534" },
-      { value: 45.25, color: "#e2dc38" },
-      { value: 46.875, color: "#fbb938" },
-      { value: 48.5, color: "#fd8b26" },
-      { value: 50.125, color: "#ef5911" },
-      { value: 51.75, color: "#d43305" },
-      { value: 53.375, color: "#ac1701" },
-      { value: 54, color: "#7a0403" }
-    ];
-
-    function updateLegend(data) {
-      legend.innerHTML = data.map(item => `
-        <div class="legend-item">
-          <div class="legend-color" style="background:${item.color}"></div>
-          <div>${item.value}</div>
-        </div>`).join('');
+    // Color scale for OGIRRI
+    function getColorForOGIRRI(value) {
+      if (value <= 923) return "#191919";
+      if (value <= 1170) return "#4e4e4e";
+      if (value <= 1279) return "#6a6a6a";
+      if (value <= 1425) return "#7cd2e1";
+      if (value <= 1490) return "#93e9e7";
+      if (value <= 1588) return "#c7f7c6";
+      return "#f8ff8a";
     }
 
-    const overlays = {
-      "OGIRRI Layer": ogirriOverlay,
-      "OGTILT Layer": ogtiltOverlay
+    // Color scale for OGTILT
+    function getColorForOGTILT(value) {
+      if (value <= 32) return "#30123b";
+      if (value <= 34) return "#4143a7";
+      if (value <= 36) return "#3e9cfe";
+      if (value <= 38) return "#21c6e1";
+      if (value <= 40) return "#48f882";
+      if (value <= 42) return "#bbf534";
+      if (value <= 44) return "#fbb938";
+      if (value <= 46) return "#ef5911";
+      if (value <= 48) return "#d43305";
+      return "#7a0403";
+    }
+
+    function loadGeoTiff(url, id, colorFn, legendSteps) {
+      fetch(url)
+        .then(res => res.arrayBuffer())
+        .then(arrayBuffer => parseGeoraster(arrayBuffer))
+        .then(georaster => {
+          const layer = new GeoRasterLayer({
+            georaster,
+            opacity: 0.8,
+            pixelValuesToColorFn: (values) => {
+              const val = values[0];
+              return val ? colorFn(val) : null;
+            },
+            resolution: 256
+          });
+
+          tiffLayers[id] = layer;
+          map.addLayer(layer);
+          map.fitBounds(layer.getBounds());
+
+          // Hover readout
+          map.on('mousemove', function(e) {
+            const { lat, lng } = e.latlng;
+            layer.getValueAtLatLng(lat, lng).then(val => {
+              if (val && val[0] !== null) {
+                info.innerHTML = `${id} value: <strong>${val[0].toFixed(2)}</strong>`;
+              } else {
+                info.innerHTML = "No data here…";
+              }
+            });
+          });
+
+          // Legend
+          legend.innerHTML = legendSteps.map(s => `
+            <div><span class="legend-color" style="background:${s.color}"></span>${s.label}</div>
+          `).join('');
+        });
+    }
+
+    // Add layer switcher
+    const baseMaps = {};
+    const overlayMaps = {
+      "OGIRRI": L.layerGroup(),
+      "OGTILT": L.layerGroup()
     };
 
-    const control = L.control.layers(null, overlays).addTo(map);
-    ogirriOverlay.addTo(map);
-    updateLegend(ogirriLegend);
+    L.control.layers(baseMaps, overlayMaps).addTo(map);
 
-    control.on('overlayadd', function (e) {
-      if (e.name === "OGIRRI Layer") {
-        map.addLayer(ogirriData);
-        map.removeLayer(ogtiltData);
-        updateLegend(ogirriLegend);
-      } else if (e.name === "OGTILT Layer") {
-        map.addLayer(ogtiltData);
-        map.removeLayer(ogirriData);
-        updateLegend(ogtiltLegend);
-      }
-    });
+    // Load OGIRRI
+    loadGeoTiff(
+      'https://clebvio.github.io/OGPV/OGIRRI.tif',
+      'OGIRRI',
+      getColorForOGIRRI,
+      [
+        { label: "≤ 923", color: "#191919" },
+        { label: "≤ 1170", color: "#4e4e4e" },
+        { label: "≤ 1279", color: "#6a6a6a" },
+        { label: "≤ 1425", color: "#7cd2e1" },
+        { label: "≤ 1490", color: "#93e9e7" },
+        { label: "≤ 1588", color: "#c7f7c6" },
+        { label: "> 1588", color: "#f8ff8a" }
+      ]
+    );
 
-    control.on('overlayremove', function (e) {
-      if (e.name === "OGIRRI Layer") map.removeLayer(ogirriData);
-      if (e.name === "OGTILT Layer") map.removeLayer(ogtiltData);
-    });
+    // Load OGTILT
+    loadGeoTiff(
+      'https://clebvio.github.io/OGPV/OGTILT.tif',
+      'OGTILT',
+      getColorForOGTILT,
+      [
+        { label: "≤ 32", color: "#30123b" },
+        { label: "≤ 34", color: "#4143a7" },
+        { label: "≤ 36", color: "#3e9cfe" },
+        { label: "≤ 38", color: "#21c6e1" },
+        { label: "≤ 40", color: "#48f882" },
+        { label: "≤ 42", color: "#bbf534" },
+        { label: "≤ 44", color: "#fbb938" },
+        { label: "≤ 46", color: "#ef5911" },
+        { label: "> 48", color: "#7a0403" }
+      ]
+    );
   </script>
 </body>
 </html>
