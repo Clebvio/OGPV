@@ -47,35 +47,28 @@
   <div class="info" id="info">Hover over the map to see values...</div>
   <div class="legend" id="legend"></div>
 
-  <!-- ✅ Scripts in correct order -->
+  <!-- ✅ Correct and working scripts -->
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/geotiff@1.0.0-beta.6/dist/geotiff.browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/plotty@0.4.0/build/plotty.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/stuartmatthews/leaflet-geotiff@v2.0.7/dist/leaflet-geotiff.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/stuartmatthews/leaflet-geotiff@v2.0.7/dist/leaflet-geotiff-plotty.min.js"></script>
+  <script src="https://rawcdn.githack.com/stuartmatthews/leaflet-geotiff/v2.0.7/dist/leaflet-geotiff.js"></script>
+  <script src="https://rawcdn.githack.com/stuartmatthews/leaflet-geotiff/v2.0.7/dist/leaflet-geotiff-plotty.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
   <script>
     const map = L.map('map').setView([51, -96], 4);
 
-    // Base Map
+    // Base map
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
-
     const bounds = [[41, -140], [61, -52]];
 
     const ogirriOverlay = L.imageOverlay('OGIRRI.tif', bounds);
     const ogtiltOverlay = L.imageOverlay('OGTILT.tif', bounds);
-
-    // ✅ Fix Plotty assignment
-    if (window.L && L.LeafletGeotiff && !L.LeafletGeotiff.Plotty && window.LeafletGeotiff_Plotty) {
-      L.LeafletGeotiff.Plotty = window.LeafletGeotiff_Plotty;
-    }
-
 
     const ogirriData = new L.LeafletGeotiff('OGIRRI.tif', {
       band: 1,
@@ -97,7 +90,7 @@
         : "No data here...";
     });
 
-    // Search bar
+    // Address search
     L.Control.geocoder({
       defaultMarkGeocode: true
     }).on('markgeocode', function(e) {
