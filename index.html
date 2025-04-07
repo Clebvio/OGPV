@@ -2,30 +2,34 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Solar Resource Map</title>
+  <title>Solar Resource Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      font-family: Arial, sans-serif;
-    }
-    .info, .legend, .progress {
+    html, body, #map { height: 100%; margin: 0; padding: 0; background: #1e1e1e; }
+    .info {
       position: absolute;
-      background: #222;
-      color: #eee;
-      padding: 8px 14px;
-      border-radius: 5px;
-      font-size: 13px;
+      bottom: 20px;
+      left: 10px;
+      background: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
       z-index: 1000;
-      box-shadow: 0 0 10px rgba(0,0,0,0.5);
     }
-    .info { bottom: 20px; left: 10px; }
-    .legend { bottom: 20px; right: 10px; }
-    .progress { top: 20px; right: 10px; }
+    .legend {
+      position: absolute;
+      bottom: 20px;
+      right: 10px;
+      background: white;
+      padding: 10px;
+      font-size: 12px;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      z-index: 1000;
+    }
     .legend-color {
       width: 20px;
       height: 12px;
@@ -38,7 +42,6 @@
   <div id="map"></div>
   <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
-  <div class="progress" id="progress">Loading map layers...</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
@@ -47,52 +50,38 @@
 
   <script>
     const map = L.map('map').setView([51, -96], 4);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap, &copy; CartoDB'
+    }).addTo(map);
+
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
-    const progressBox = document.getElementById('progress');
-    const layers = {};
-    const overlayControl = L.control.layers(null, {}).addTo(map);
-    let layersLoaded = 0;
-    const totalLayers = 2;
 
-    // Dark base map with labels
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; Carto',
-      subdomains: 'abcd',
-      maxZoom: 19
-    }).addTo(map);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
-      maxZoom: 20
-    }).addTo(map);
-
-    // Geocoder
     L.Control.geocoder({ defaultMarkGeocode: true })
-      .on('markgeocode', function (e) {
+      .on('markgeocode', function(e) {
         map.setView(e.geocode.center, 12);
       }).addTo(map);
 
-    // Utility
     function updateLegend(title, ranges) {
       legend.innerHTML = `<strong>${title}</strong><br>` + ranges.map(r => `
         <div><span class="legend-color" style="background:${r.color}"></span>${r.label}</div>
       `).join('');
     }
 
-    function loadGeoTIFFLayer({ name, url, colorScale, ranges }) {
+    const layers = {};
+
+    function loadGeoTIFFLayer({ name, url, colorScale, ranges, valueMin, valueMax }) {
       fetch(url)
         .then(r => r.arrayBuffer())
         .then(parseGeoraster)
         .then(georaster => {
-          progressBox.innerText = `✅ Loaded "${name}"`;
-
           const layer = new GeoRasterLayer({
             georaster,
             opacity: 0.85,
             resolution: 256,
             pixelValuesToColorFn: values => {
               const v = values[0];
-              if (v == null) return null;
+              if (v == null || v < valueMin || v > valueMax) return null;
               return colorScale(v);
             }
           });
@@ -106,105 +95,92 @@
             updateLegend(name, ranges);
           }
 
-          layersLoaded++;
-          if (layersLoaded === totalLayers) {
-            progressBox.innerText = "✅ All layers loaded";
-            setTimeout(() => progressBox.style.display = "none", 1500);
-          }
-
-          map.on('mousemove', function (e) {
-            Object.entries(layers).forEach(([layerName, layerObj]) => {
-              if (!map.hasLayer(layerObj)) return;
-              if (typeof layerObj.getValueAtLatLng === 'function') {
-                layerObj.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-                  if (val && val[0] != null) {
-                    info.innerHTML = `${layerName}: <strong>${val[0].toFixed(2)}</strong>`;
-                  } else {
-                    info.innerHTML = "No data here…";
-                  }
-                });
-              }
+          map.on('mousemove', function(e) {
+            if (!map.hasLayer(layer)) return;
+            layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+              info.innerHTML = val && val[0] != null
+                ? `${name}: <strong>${val[0].toFixed(2)}</strong>`
+                : "No data here…";
             });
           });
-        })
-        .catch(err => {
-          console.error(`❌ Failed to load "${name}"`, err);
-          progressBox.innerText = `❌ Failed to load "${name}"`;
         });
     }
 
-    // OGTILT_clean.tif layer
-    loadGeoTIFFLayer({
-      name: "OGTILT",
-      url: "https://clebvio.github.io/OGPV/OGTILT_clean.tif",
-      colorScale: val => {
-        if (val <= 30.625) return "rgba(48,18,59,1)";
-        if (val <= 32.25) return "rgba(65,67,167,1)";
-        if (val <= 33.875) return "rgba(71,113,233,1)";
-        if (val <= 35.5) return "rgba(62,156,254,1)";
-        if (val <= 37.125) return "rgba(33,198,225,1)";
-        if (val <= 38.75) return "rgba(27,229,181,1)";
-        if (val <= 40.375) return "rgba(72,248,130,1)";
-        if (val <= 42) return "rgba(137,255,77,1)";
-        if (val <= 43.625) return "rgba(187,245,52,1)";
-        if (val <= 45.25) return "rgba(226,220,56,1)";
-        if (val <= 46.875) return "rgba(251,185,56,1)";
-        if (val <= 48.5) return "rgba(253,139,38,1)";
-        if (val <= 50.125) return "rgba(239,89,17,1)";
-        if (val <= 51.75) return "rgba(212,51,5,1)";
-        if (val <= 53.375) return "rgba(172,23,1,1)";
-        return "rgba(122,4,3,1)";
-      },
-      ranges: [
-        { label: "≤ 31", color: "rgba(48,18,59,1)" },
-        { label: "31–32", color: "rgba(65,67,167,1)" },
-        { label: "32–34", color: "rgba(71,113,233,1)" },
-        { label: "34–36", color: "rgba(62,156,254,1)" },
-        { label: "36–37", color: "rgba(33,198,225,1)" },
-        { label: "37–39", color: "rgba(27,229,181,1)" },
-        { label: "39–40", color: "rgba(72,248,130,1)" },
-        { label: "40–42", color: "rgba(137,255,77,1)" },
-        { label: "42–44", color: "rgba(187,245,52,1)" },
-        { label: "44–45", color: "rgba(226,220,56,1)" },
-        { label: "45–47", color: "rgba(251,185,56,1)" },
-        { label: "47–49", color: "rgba(253,139,38,1)" },
-        { label: "49–50", color: "rgba(239,89,17,1)" },
-        { label: "50–52", color: "rgba(212,51,5,1)" },
-        { label: "52–53", color: "rgba(172,23,1,1)" },
-        { label: "> 53", color: "rgba(122,4,3,1)" }
-      ]
-    });
+    const overlayControl = L.control.layers(null, {}).addTo(map);
 
-    // OGIRRI_clean.tif layer
     loadGeoTIFFLayer({
       name: "OGIRRI",
-      url: "https://clebvio.github.io/OGPV/OGIRRI_clean.tif",
+      url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
+      valueMin: 800,
+      valueMax: 1600,
       colorScale: val => {
-        if (val <= 800) return "rgba(255,255,255,1)";
-        if (val <= 923.07) return "rgba(25,25,25,1)";
-        if (val <= 1170.19) return "rgba(78,78,78,1)";
-        if (val <= 1279.48) return "rgba(106,106,106,1)";
-        if (val <= 1425.19) return "rgba(124,210,225,1)";
-        if (val <= 1490.18) return "rgba(147,233,231,1)";
-        if (val <= 1588.63) return "rgba(199,247,198,1)";
-        return "rgba(248,255,138,1)";
+        if (val < 923) return "#191919";
+        if (val < 1170) return "#4e4e4e";
+        if (val < 1279) return "#6a6a6a";
+        if (val < 1425) return "#7cd2e1";
+        if (val < 1490) return "#93e9e7";
+        if (val < 1588) return "#c7f7c6";
+        return "#f8ff8a";
       },
       ranges: [
-        { label: "≤ 800", color: "rgba(255,255,255,1)" },
-        { label: "≤ 923", color: "rgba(25,25,25,1)" },
-        { label: "≤ 1170", color: "rgba(78,78,78,1)" },
-        { label: "≤ 1279", color: "rgba(106,106,106,1)" },
-        { label: "≤ 1425", color: "rgba(124,210,225,1)" },
-        { label: "≤ 1490", color: "rgba(147,233,231,1)" },
-        { label: "≤ 1588", color: "rgba(199,247,198,1)" },
-        { label: "> 1588", color: "rgba(248,255,138,1)" }
+        { label: "≤ 923", color: "#191919" },
+        { label: "≤ 1170", color: "#4e4e4e" },
+        { label: "≤ 1279", color: "#6a6a6a" },
+        { label: "≤ 1425", color: "#7cd2e1" },
+        { label: "≤ 1490", color: "#93e9e7" },
+        { label: "≤ 1588", color: "#c7f7c6" },
+        { label: "> 1588", color: "#f8ff8a" }
       ]
     });
 
-    map.on('overlayadd', function (e) {
+    loadGeoTIFFLayer({
+      name: "OGTILT",
+      url: "https://clebvio.github.io/OGPV/OGTILT.tif",
+      valueMin: 29,
+      valueMax: 55,
+      colorScale: val => {
+        if (val < 32.25) return "#30123b";
+        if (val < 33.875) return "#4143a7";
+        if (val < 35.5) return "#4771e9";
+        if (val < 37.125) return "#3e9cfe";
+        if (val < 38.75) return "#21c6e1";
+        if (val < 40.375) return "#1de5b5";
+        if (val < 42) return "#48f882";
+        if (val < 43.625) return "#89ff4d";
+        if (val < 45.25) return "#bbf534";
+        if (val < 46.875) return "#e2dc38";
+        if (val < 48.5) return "#fbb938";
+        if (val < 50.125) return "#fd8b26";
+        if (val < 51.75) return "#ef5911";
+        if (val < 53.375) return "#d43305";
+        return "#7a0403";
+      },
+      ranges: [
+        { label: "≤ 32", color: "#30123b" },
+        { label: "≤ 34", color: "#4143a7" },
+        { label: "≤ 36", color: "#4771e9" },
+        { label: "≤ 37", color: "#3e9cfe" },
+        { label: "≤ 39", color: "#21c6e1" },
+        { label: "≤ 40", color: "#1de5b5" },
+        { label: "≤ 42", color: "#48f882" },
+        { label: "≤ 44", color: "#89ff4d" },
+        { label: "≤ 45", color: "#bbf534" },
+        { label: "≤ 47", color: "#e2dc38" },
+        { label: "≤ 49", color: "#fbb938" },
+        { label: "≤ 50", color: "#fd8b26" },
+        { label: "≤ 52", color: "#ef5911" },
+        { label: "≤ 53", color: "#d43305" },
+        { label: "> 53", color: "#7a0403" }
+      ]
+    });
+
+    map.on('overlayadd', function(e) {
       const layer = layers[e.name];
-      if (layer && layer._legend) updateLegend(e.name, layer._legend);
+      if (layer && layer._legend) {
+        updateLegend(e.name, layer._legend);
+      }
     });
   </script>
 </body>
 </html>
+
