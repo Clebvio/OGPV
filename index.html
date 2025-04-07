@@ -62,7 +62,6 @@
     </div>
   </div>
 
-  <!-- Scripts -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   <script src="https://unpkg.com/georaster"></script>
@@ -74,16 +73,20 @@
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
     const layers = {};
+    let activeLayer = null;
+
     const OGIRRI_MIN = 800;
     const OGIRRI_MAX = 1619;
-
     const ogirriGradient = chroma.scale([
       "#ffffff", "#191919", "#4e4e4e", "#6a6a6a",
       "#7cd2e1", "#93e9e7", "#c7f7c6", "#f8ff8a"
     ]).domain([OGIRRI_MIN, OGIRRI_MAX]);
 
+    // Dark basemap with labels, borders, roads on top
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a>, &copy; OpenStreetMap contributors'
+      attribution: '&copy; CARTO, OpenStreetMap contributors',
+      subdomains: 'abcd',
+      maxZoom: 19
     }).addTo(map);
 
     L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', e => {
@@ -173,23 +176,39 @@
 
           if (Object.keys(layers).length === 1) {
             map.addLayer(layer);
+            activeLayer = layer;
             useChroma
               ? updateGradientLegend(name, ogirriGradient)
               : updateLegend(name, discreteColors.map(d => d.color));
           }
-
-          map.on('mousemove', e => {
-            if (!map.hasLayer(layer)) return;
-            layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-              info.innerHTML = val && val[0] != null
-                ? `${name}: <strong>${val[0].toFixed(2)}</strong>`
-                : "No data here…";
-            });
-          });
         })
         .catch(err => console.error(`❌ ${name} load failed:`, err));
     }
 
+    // Hover info
+    map.on('mousemove', e => {
+      if (!activeLayer || typeof activeLayer.getValueAtLatLng !== 'function') return;
+      activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+        info.innerHTML = val && val[0] != null
+          ? `${activeLayer.options.name || 'Data'}: <strong>${val[0].toFixed(2)}</strong>`
+          : "No data here…";
+      });
+    });
+
+    // Update legend when switching
+    map.on('overlayadd', function(e) {
+      const layer = layers[e.name];
+      if (layer) {
+        activeLayer = layer;
+        if (e.name === "OGIRRI") {
+          updateGradientLegend("OGIRRI", ogirriGradient);
+        } else if (e.name === "OGTILT") {
+          updateLegend("OGTILT", layers["OGTILT"].options.discreteColors.map(d => d.color));
+        }
+      }
+    });
+
+    // Load the layers
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
