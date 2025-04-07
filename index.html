@@ -93,11 +93,11 @@
     const overlayControl = L.control.layers(null, {}).addTo(map);
 
     function fetchWithProgress(url, layerName) {
-      const progressContainer = document.getElementById('progress-container');
+      const container = document.getElementById('progress-container');
       const label = document.getElementById('progress-label');
       const bar = document.getElementById('progress-bar');
 
-      progressContainer.style.display = 'block';
+      container.style.display = 'block';
       label.innerText = `Loading ${layerName}...`;
 
       return fetch(url).then(response => {
@@ -111,7 +111,7 @@
         function read() {
           return reader.read().then(({ done, value }) => {
             if (done) {
-              progressContainer.style.display = 'none';
+              container.style.display = 'none';
               return new Blob(chunks).arrayBuffer();
             }
             chunks.push(value);
@@ -122,6 +122,7 @@
             return read();
           });
         }
+
         return read();
       });
     }
@@ -156,7 +157,7 @@
           const layer = new GeoRasterLayer({
             georaster,
             opacity: 0.85,
-            resolution: 256,
+            resolution: 128,
             zIndex: 1,
             pixelValuesToColorFn: val => {
               if (val == null || val < valueMin || val > valueMax) return null;
