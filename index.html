@@ -7,7 +7,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; }
+    html, body, #map { height: 100%; margin: 0; padding: 0; cursor: crosshair; }
+
     .info {
       position: absolute;
       bottom: 20px;
@@ -18,6 +19,7 @@
       border-radius: 4px;
       z-index: 1000;
     }
+
     .legend {
       position: absolute;
       bottom: 20px;
@@ -30,16 +32,19 @@
       z-index: 1000;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
     }
+
     .legend-item {
       display: flex;
       align-items: center;
       margin-bottom: 2px;
     }
+
     .legend-color {
       width: 16px;
       height: 12px;
       margin-right: 6px;
     }
+
     #progressContainer {
       position: absolute;
       top: 10px;
@@ -73,7 +78,14 @@
     }).setView([51, -96], 4);
 
     const tileBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors & CartoDB'
+      attribution: '&copy; OpenStreetMap contributors & CartoDB',
+      zIndex: 1 // ✅ Base tile below raster
+    }).addTo(map);
+
+    // ✅ Add vector data (borders, cities, roads)
+    const vectorLabels = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      opacity: 0.5,
+      zIndex: 1000 // Always on top
     }).addTo(map);
 
     const info = document.getElementById("info");
@@ -86,14 +98,13 @@
 
     function updateLegend(title, ranges, isGradient = false) {
       if (isGradient) {
-        let gradientHTML = `
+        legend.innerHTML = `
           <strong>${title}</strong><br>
-          <div style="background: linear-gradient(to right, #ffffff, #4e4e4e, #6a6a6a, #7cd2e1, #93e9e7, #c7f7c6, #f8ff8a);
+          <div style="background: linear-gradient(to right, #ffffff, #191919, #4e4e4e, #6a6a6a, #7cd2e1, #93e9e7, #c7f7c6, #f8ff8a);
                       height: 15px; width: 150px; margin-bottom: 5px; border: 1px solid #ccc;"></div>
           <div style="display: flex; justify-content: space-between;">
             <span>800</span><span>1600</span>
           </div>`;
-        legend.innerHTML = gradientHTML;
       } else {
         legend.innerHTML = `<strong>${title}</strong><br>` + ranges.map(r => `
           <div class="legend-item">
@@ -116,13 +127,14 @@
         .then(georaster => {
           const layer = new GeoRasterLayer({
             georaster,
-            resolution: 128, // better zoomed-out detail
+            resolution: 128,
             opacity: 0.85,
             pixelValuesToColorFn: values => {
               const val = values[0];
               if (val == null || val < valueMin || val > valueMax) return null;
-              return colorScale(val);
-            }
+              return typeof colorScale === "function" ? colorScale(val) : colorScale;
+            },
+            zIndex: 10
           });
 
           layers[name] = layer;
@@ -158,8 +170,7 @@
         });
     }
 
-    // OGIRRI (gradient)
-    // OGIRRI (gradient)
+    // ✅ OGIRRI - gradient
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -167,22 +178,28 @@
       valueMax: 1680,
       isGradient: true,
       colorScale: chroma.scale([
-        { color: "#ffffff", value: 800 },
-        { color: "#191919", value: 923.07 },
-        { color: "#4e4e4e", value: 1170.19 },
-        { color: "#6a6a6a", value: 1279.48 },
-        { color: "#7cd2e1", value: 1425.19 },
-        { color: "#93e9e7", value: 1490.18 },
-        { color: "#c7f7c6", value: 1588.63 },
-        { color: "#f8ff8a", value: 1619.15 }
-      ])
-      .domain([800, 1619.15])
-      .mode("lrgb"),
-      ranges: [] // legend uses gradient
+        "#ffffff", // 800
+        "#191919", // 923.07
+        "#4e4e4e", // 1170.19
+        "#6a6a6a", // 1279.48
+        "#7cd2e1", // 1425.19
+        "#93e9e7", // 1490.18
+        "#c7f7c6", // 1588.63
+        "#f8ff8a"  // 1619.15
+      ]).domain([
+        800,
+        923.07,
+        1170.19,
+        1279.48,
+        1425.19,
+        1490.18,
+        1588.63,
+        1619.15
+      ]).mode("lrgb"),
+      ranges: []
     });
 
-
-    // OGTILT (stepped)
+    // ✅ OGTILT - stepped
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
