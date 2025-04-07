@@ -7,12 +7,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      cursor: crosshair;
-    }
+    html, body, #map { height: 100%; margin: 0; padding: 0; background: #1c1c1c; }
     .info {
       position: absolute;
       bottom: 20px;
@@ -35,212 +30,166 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
       z-index: 1000;
     }
+    .legend-gradient {
+      height: 12px;
+      width: 200px;
+      background: linear-gradient(to right, #191919, #4e4e4e, #6a6a6a, #7cd2e1, #93e9e7, #c7f7c6, #f8ff8a);
+      margin-bottom: 5px;
+    }
+    .legend-labels {
+      display: flex;
+      justify-content: space-between;
+    }
+    .legend-color {
+      width: 16px;
+      height: 12px;
+      margin-right: 6px;
+      display: inline-block;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div class="info" id="info">Hover over the map to see values…</div>
-  <div class="legend" id="legend">Legend will load with data layer.</div>
+  <div class="legend" id="legend">Legend loading...</div>
 
-  <div id="progress-container" style="
-    position: absolute;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 260px;
-    background: #222;
-    color: #eee;
-    font-family: sans-serif;
-    font-size: 13px;
-    padding: 8px;
-    border-radius: 6px;
-    text-align: center;
-    z-index: 1001;
-    display: none;">
-    <div id="progress-label">Loading layer...</div>
-    <div style="background:#444; height: 6px; margin-top:6px; border-radius: 3px; overflow: hidden;">
-      <div id="progress-bar" style="width: 0%; background:#42b983; height: 100%;"></div>
-    </div>
-  </div>
-
+  <!-- Libraries -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   <script src="https://unpkg.com/georaster"></script>
   <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
-  <script src="https://unpkg.com/chroma-js@2.4.2/chroma.min.js"></script>
+  <script src="https://unpkg.com/chroma-js@2.1.0/chroma.min.js"></script>
 
   <script>
-    const map = L.map('map').setView([51, -96], 4);
+    const map = L.map('map', {
+      preferCanvas: true
+    }).setView([51, -96], 4);
+
+    // Dark basemap with roads/borders/labels
+    const basemap = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+    }).addTo(map);
+
     const info = document.getElementById('info');
     const legend = document.getElementById('legend');
+
+    L.Control.geocoder({
+      defaultMarkGeocode: true
+    }).on('markgeocode', function(e) {
+      map.setView(e.geocode.center, 12);
+    }).addTo(map);
+
     const layers = {};
-    let activeLayer = null;
-
-    const OGIRRI_MIN = 800;
-    const OGIRRI_MAX = 1619;
-    const ogirriGradient = chroma.scale([
-      "#ffffff", "#191919", "#4e4e4e", "#6a6a6a",
-      "#7cd2e1", "#93e9e7", "#c7f7c6", "#f8ff8a"
-    ]).domain([OGIRRI_MIN, OGIRRI_MAX]);
-
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; CARTO, OpenStreetMap contributors',
-      subdomains: 'abcd',
-      maxZoom: 19
-    }).addTo(map);
-
-    L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', e => {
-      map.setView(e.geocode.center, 13);
-    }).addTo(map);
-
     const overlayControl = L.control.layers(null, {}).addTo(map);
 
-    function fetchWithProgress(url, layerName) {
-      const container = document.getElementById('progress-container');
-      const label = document.getElementById('progress-label');
-      const bar = document.getElementById('progress-bar');
-
-      container.style.display = 'block';
-      label.innerText = `Loading ${layerName}...`;
-
-      return fetch(url).then(response => {
-        if (!response.ok) throw new Error(`Failed to fetch ${layerName}`);
-        const total = response.headers.get('Content-Length');
-        if (!total) return response.arrayBuffer();
-
-        const reader = response.body.getReader();
-        let loaded = 0, chunks = [];
-
-        function read() {
-          return reader.read().then(({ done, value }) => {
-            if (done) {
-              container.style.display = 'none';
-              return new Blob(chunks).arrayBuffer();
-            }
-            chunks.push(value);
-            loaded += value.length;
-            const percent = Math.round((loaded / total) * 100);
-            bar.style.width = `${percent}%`;
-            label.innerText = `Loading ${layerName}... ${percent}%`;
-            return read();
-          });
-        }
-
-        return read();
-      });
-    }
-
-    function updateGradientLegend(title, scale) {
-      const steps = [];
-      for (let i = 0; i <= 10; i++) {
-        const val = OGIRRI_MIN + (OGIRRI_MAX - OGIRRI_MIN) * (i / 10);
-        steps.push(scale(val).hex());
+    function updateLegend(layerName, type, data) {
+      if (type === "gradient") {
+        legend.innerHTML = `
+          <strong>${layerName}</strong>
+          <div class="legend-gradient"></div>
+          <div class="legend-labels">
+            <span>800</span><span>1600</span>
+          </div>
+        `;
+      } else {
+        legend.innerHTML = `<strong>${layerName}</strong><br>` + data.map(r => `
+          <div><span class="legend-color" style="background:${r.color}"></span>${r.label}</div>
+        `).join('');
       }
-      legend.innerHTML = `
-        <div><strong>${title}</strong></div>
-        <div style="height: 12px; width: 200px;
-        background: linear-gradient(to right, ${steps.join(',')});
-        border: 1px solid #aaa; margin-bottom: 4px;"></div>
-        <div style="display: flex; justify-content: space-between; font-size: 10px;">
-          <span>${OGIRRI_MIN}</span><span>${OGIRRI_MAX}</span>
-        </div>`;
     }
 
-    function updateLegend(title, colors) {
-      legend.innerHTML = `<strong>${title}</strong><br>` + colors.map(c => `
-        <div><span style="display:inline-block;width:16px;height:12px;background:${c};margin-right:6px;"></span>${c}</div>
-      `).join('');
-    }
-
-    function loadGeoTIFFLayer({ name, url, valueMin, valueMax, useChroma = false, discreteColors = [] }) {
+    function loadGeoTIFFLayer({ name, url, min, max, colorFn, legendType, legendData }) {
       console.log(`🛰️ Attempting to load ${name}...`);
-      fetchWithProgress(url, name)
+
+      fetch(url)
+        .then(r => r.arrayBuffer())
         .then(parseGeoraster)
         .then(georaster => {
           const layer = new GeoRasterLayer({
             georaster,
             opacity: 0.85,
             resolution: 128,
-            zIndex: 1,
-            name,
-            discreteColors, // ✅ Pass into options
-            pixelValuesToColorFn: val => {
-              if (val == null || val < valueMin || val > valueMax) return null;
-              return useChroma
-                ? ogirriGradient(val).hex()
-                : (discreteColors.find(rule => val <= rule.max)?.color || "#000");
+            pixelValuesToColorFn: values => {
+              const v = values[0];
+              if (v == null || v < min || v > max) return null;
+              return colorFn(v);
             }
           });
 
+          layer._legend = legendData;
+          layer._legendType = legendType;
           layers[name] = layer;
           overlayControl.addOverlay(layer, name);
-          console.log(`✅ Registered: ${name}`);
 
           if (Object.keys(layers).length === 1) {
             map.addLayer(layer);
-            activeLayer = layer;
-            useChroma
-              ? updateGradientLegend(name, ogirriGradient)
-              : updateLegend(name, discreteColors.map(d => d.color));
+            updateLegend(name, legendType, legendData);
           }
+
+          console.log(`✅ Registered: ${name}`);
         })
         .catch(err => console.error(`❌ ${name} load failed:`, err));
     }
 
-    // Hover readout
-    map.on('mousemove', e => {
-      if (!activeLayer || typeof activeLayer.getValueAtLatLng !== 'function') return;
-      activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-        info.innerHTML = val && val[0] != null
-          ? `${activeLayer.options.name || 'Data'}: <strong>${val[0].toFixed(2)}</strong>`
-          : "No data here…";
-      });
-    });
-
-    map.on('overlayadd', function(e) {
-      const layer = layers[e.name];
-      if (layer) {
-        activeLayer = layer;
-        if (e.name === "OGIRRI") {
-          updateGradientLegend("OGIRRI", ogirriGradient);
-        } else if (e.name === "OGTILT") {
-          const dc = layer.options.discreteColors;
-          if (dc) updateLegend("OGTILT", dc.map(d => d.color));
-        }
-      }
-    });
-
+    // OGIRRI (Gradient)
+    const gradientScale = chroma.scale(['#191919', '#4e4e4e', '#6a6a6a', '#7cd2e1', '#93e9e7', '#c7f7c6', '#f8ff8a']).domain([800, 1600]);
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
-      valueMin: OGIRRI_MIN,
-      valueMax: OGIRRI_MAX,
-      useChroma: true
+      min: 800,
+      max: 1600,
+      colorFn: val => gradientScale(val).hex(),
+      legendType: "gradient",
+      legendData: null
     });
 
+    // OGTILT (Discrete)
+    const ogtiltRanges = [
+      { value: 30.625, color: "rgb(48,18,59)", label: "≤ 32" },
+      { value: 32.25, color: "rgb(65,67,167)", label: "≤ 34" },
+      { value: 33.875, color: "rgb(71,113,233)", label: "≤ 36" },
+      { value: 35.5, color: "rgb(62,156,254)", label: "≤ 38" },
+      { value: 37.125, color: "rgb(33,198,225)", label: "≤ 40" },
+      { value: 38.75, color: "rgb(27,229,181)", label: "≤ 42" },
+      { value: 40.375, color: "rgb(72,248,130)", label: "≤ 44" },
+      { value: 42, color: "rgb(137,255,77)", label: "≤ 46" },
+      { value: 43.625, color: "rgb(187,245,52)", label: "≤ 48" },
+      { value: 45.25, color: "rgb(226,220,56)", label: "> 48" }
+    ];
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
-      valueMin: 29,
-      valueMax: 55,
-      discreteColors: [
-        { max: 30.625, color: "rgb(48,18,59)" },
-        { max: 32.25, color: "rgb(65,67,167)" },
-        { max: 33.875, color: "rgb(71,113,233)" },
-        { max: 35.5, color: "rgb(62,156,254)" },
-        { max: 37.125, color: "rgb(33,198,225)" },
-        { max: 38.75, color: "rgb(27,229,181)" },
-        { max: 40.375, color: "rgb(72,248,130)" },
-        { max: 42, color: "rgb(137,255,77)" },
-        { max: 43.625, color: "rgb(187,245,52)" },
-        { max: 45.25, color: "rgb(226,220,56)" },
-        { max: 46.875, color: "rgb(251,185,56)" },
-        { max: 48.5, color: "rgb(253,139,38)" },
-        { max: 50.125, color: "rgb(239,89,17)" },
-        { max: 51.75, color: "rgb(212,51,5)" },
-        { max: 53.375, color: "rgb(172,23,1)" },
-        { max: 100, color: "rgb(122,4,3)" }
-      ]
+      min: 29,
+      max: 55,
+      colorFn: val => {
+        for (const r of ogtiltRanges) {
+          if (val <= r.value) return r.color;
+        }
+        return "rgb(122,4,3)";
+      },
+      legendType: "discrete",
+      legendData: ogtiltRanges
+    });
+
+    map.on("overlayadd", function(e) {
+      const layer = layers[e.name];
+      if (layer) {
+        updateLegend(e.name, layer._legendType, layer._legend);
+      }
+    });
+
+    map.on("mousemove", function(e) {
+      Object.entries(layers).forEach(([name, layer]) => {
+        if (map.hasLayer(layer) && typeof layer.getValueAtLatLng === "function") {
+          layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+            if (val && val[0] != null) {
+              info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
+            } else {
+              info.innerHTML = "No data here…";
+            }
+          });
+        }
+      });
     });
   </script>
 </body>
