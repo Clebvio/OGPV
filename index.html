@@ -159,17 +159,28 @@
     }
 
     // OGIRRI (gradient)
+    // OGIRRI (gradient)
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
       valueMin: 800,
-      valueMax: 1600,
+      valueMax: 1680,
       isGradient: true,
       colorScale: chroma.scale([
-        '#ffffff', '#4e4e4e', '#6a6a6a', '#7cd2e1', '#93e9e7', '#c7f7c6', '#f8ff8a'
-      ]).domain([800, 1600]),
-      ranges: [] // unused for gradient legend
+        { color: "#ffffff", value: 800 },
+        { color: "#191919", value: 923.07 },
+        { color: "#4e4e4e", value: 1170.19 },
+        { color: "#6a6a6a", value: 1279.48 },
+        { color: "#7cd2e1", value: 1425.19 },
+        { color: "#93e9e7", value: 1490.18 },
+        { color: "#c7f7c6", value: 1588.63 },
+        { color: "#f8ff8a", value: 1619.15 }
+      ])
+      .domain([800, 1619.15])
+      .mode("lrgb"),
+      ranges: [] // legend uses gradient
     });
+
 
     // OGTILT (stepped)
     loadGeoTIFFLayer({
