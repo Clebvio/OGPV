@@ -7,16 +7,13 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map {
-      height: 100%; margin: 0; padding: 0;
-      background: #2b2b2b;
-      cursor: crosshair;
-    }
+    html, body, #map { height: 100%; margin: 0; padding: 0; cursor: crosshair; }
     .info {
       position: absolute;
-      pointer-events: none;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 6px 10px;
+      bottom: 20px;
+      left: 10px;
+      background: white;
+      padding: 6px 12px;
       font-size: 14px;
       border-radius: 4px;
       z-index: 1000;
@@ -60,11 +57,10 @@
 </head>
 <body>
   <div id="map"></div>
-  <div class="info" id="info">Hover over the map…</div>
+  <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
   <div id="progressContainer">Loading…</div>
 
-  <!-- Libraries -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   <script src="https://unpkg.com/georaster"></script>
@@ -74,13 +70,15 @@
   <script>
     const map = L.map('map', {
       preferCanvas: true
-    }).setView([54, -112.5], 6);
+    }).setView([50, -112], 6); // Centered near Alberta
 
     const baseTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
       maxZoom: 16
     }).addTo(map);
 
     const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
       maxZoom: 16,
       zIndex: 1000
     }).addTo(map);
@@ -88,9 +86,6 @@
     const info = document.getElementById("info");
     const legend = document.getElementById("legend");
     const progress = document.getElementById("progressContainer");
-
-    const layers = {};
-    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
 
     L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', function(e) {
       map.setView(e.geocode.center, 10);
@@ -102,7 +97,7 @@
         legend.innerHTML = `
           <strong>${title}</strong><br>
           <div style="background: linear-gradient(to right, #ffffff, #191919, #4e4e4e, #6a6a6a, #7cd2e1, #93e9e7, #c7f7c6, #f8ff8a);
-                      height: 15px; width: 160px; margin-bottom: 5px; border: 1px solid #ccc;"></div>
+                      height: 15px; width: 150px; margin-bottom: 5px; border: 1px solid #ccc;"></div>
           <div style="display: flex; justify-content: space-between;">
             <span>800</span><span>1600</span>
           </div>`;
@@ -114,12 +109,16 @@
       }
     }
 
+    const layers = {};
+    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
+
     function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
-      progress.innerText = `Loading ${name}…`;
+      console.log("🛰️ Attempting to load " + name + "...");
+      progress.innerText = `Loading ${name}...`;
       progress.style.display = "block";
 
       fetch(url)
-        .then(r => r.arrayBuffer())
+        .then(res => res.arrayBuffer())
         .then(parseGeoraster)
         .then(georaster => {
           const layer = new GeoRasterLayer({
@@ -129,7 +128,7 @@
             pixelValuesToColorFn: values => {
               const val = values[0];
               if (val == null || val < valueMin || val > valueMax) return null;
-              return colorScale(val);
+              return typeof colorScale === "function" ? colorScale(val) : colorScale;
             },
             zIndex: 10
           });
@@ -140,11 +139,13 @@
 
           overlayControl.addOverlay(layer, name);
 
+          // ✅ Show OGIRRI by default only once
           if (name === "OGIRRI") {
             map.addLayer(layer);
             updateLegend(name, ranges, isGradient);
           }
 
+          console.log(`✅ Registered: ${name}`);
           progress.style.display = "none";
         })
         .catch(err => {
@@ -153,6 +154,48 @@
         });
     }
 
+    function showBothValuesAt(latlng) {
+      const promises = Object.entries(layers).map(([name, layer]) => {
+        if (map.hasLayer(layer) && typeof layer.getValueAtLatLng === "function") {
+          return layer.getValueAtLatLng(latlng.lat, latlng.lng).then(val => {
+            return { name, value: val ? val[0] : null };
+          });
+        } else {
+          return Promise.resolve({ name, value: null });
+        }
+      });
+
+      Promise.all(promises).then(results => {
+        const output = results.map(r =>
+          r.value != null
+            ? `${r.name}: <strong>${r.value.toFixed(2)}</strong>`
+            : `${r.name}: <em>No data</em>`
+        ).join("<br>");
+        L.popup()
+          .setLatLng(latlng)
+          .setContent(output)
+          .openOn(map);
+      });
+    }
+
+    map.on("click", function(e) {
+      showBothValuesAt(e.latlng);
+    });
+
+    map.on("mousemove", function(e) {
+      const activeLayer = Object.values(layers).find(l => map.hasLayer(l));
+      if (activeLayer?.getValueAtLatLng) {
+        activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+          if (val && val[0] != null) {
+            info.innerHTML = `<strong>${val[0].toFixed(2)}</strong>`;
+          } else {
+            info.innerHTML = "No data here…";
+          }
+        });
+      }
+    });
+
+    // 🟢 OGIRRI
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -169,6 +212,7 @@
       ranges: []
     });
 
+    // 🟣 OGTILT
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -200,37 +244,6 @@
         { label: "> 48", color: "#7a0403" }
       ]
     });
-
-    // 📍 Hover – track values and position the label
-    map.on("mousemove", function(e) {
-      const lat = e.latlng.lat;
-      const lng = e.latlng.lng;
-      info.style.left = `${e.originalEvent.clientX + 10}px`;
-      info.style.top = `${e.originalEvent.clientY + 10}px`;
-
-      showBothValuesAt({ lat, lng });
-    });
-
-    // 📌 Click: pin values from both layers
-    map.on("click", function(e) {
-      const lat = e.latlng.lat;
-      const lng = e.latlng.lng;
-      showBothValuesAt({ lat, lng }, true);
-    });
-
-    function showBothValuesAt({ lat, lng }, isClick = false) {
-      const activeLayers = Object.entries(layers).filter(([_, l]) => map.hasLayer(l));
-
-      Promise.all(activeLayers.map(([name, layer]) =>
-        layer.getValueAtLatLng(lat, lng).then(val => {
-          const v = Array.isArray(val) ? val[0] : val;
-          return `${name}: <strong>${v != null ? v.toFixed(2) : "N/A"}</strong>`;
-        })
-      )).then(results => {
-        info.innerHTML = results.join("<br>");
-        if (isClick) console.log("📍 Clicked values:", results);
-      });
-    }
 
     map.on("overlayadd", function(e) {
       const layer = layers[e.name];
