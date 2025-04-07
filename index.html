@@ -85,13 +85,6 @@
       zIndex: 1000 // ensures labels render above raster
     }).addTo(map);
 
-
-    // 🏙 Vector labels: cities, roads, borders
-    const osmLabels = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
-      opacity: 0.7,
-      zIndex: 1000
-    }).addTo(map);
-
     const info = document.getElementById("info");
     const legend = document.getElementById("legend");
     const progress = document.getElementById("progressContainer");
