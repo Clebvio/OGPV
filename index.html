@@ -85,7 +85,10 @@
     function loadGeoTIFFLayer({ name, url, colorScale, ranges, valueMin, valueMax }) {
       console.log(`Attempting to load ${name}...`);
       fetch(url)
-        .then(r => r.arrayBuffer())
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status} for ${name}`);
+          return r.arrayBuffer();
+        })
         .then(parseGeoraster)
         .then(georaster => {
           const layer = new GeoRasterLayer({
@@ -101,15 +104,15 @@
           layer._legend = ranges;
           layers[name] = layer;
           overlayControl.addOverlay(layer, name);
-          if (Object.keys(layers).length === 1) {
+
+          if (name === "OGIRRI" && !map.hasLayer(layer)) {
             map.addLayer(layer);
-            if (name === "OGIRRI") {
-              updateLegend(name, [
-                "#303030", "#4e6b6e", "#6aa6ad", "#90d5dc",
-                "#b2ebf2", "#d0f3de", "#f1f8c0", "#fffbc1"
-              ]);
-            }
+            updateLegend(name, [
+              "#303030", "#4e6b6e", "#6aa6ad", "#90d5dc",
+              "#b2ebf2", "#d0f3de", "#f1f8c0", "#fffbc1"
+            ]);
           }
+
           map.on('mousemove', function(e) {
             if (!map.hasLayer(layer)) return;
             if (typeof layer.getValueAtLatLng === 'function') {
@@ -180,7 +183,10 @@
           "#b2ebf2", "#d0f3de", "#f1f8c0", "#fffbc1"
         ]);
       } else if (layer && layer._legend) {
-        updateLegend(e.name, layer._legend.map(r => r.color));
+        legend.innerHTML = `<strong>${e.name}</strong><br>` + layer._legend.map(r => `
+          <div style="margin-bottom: 3px">
+            <span style="display:inline-block;width:16px;height:12px;background:${r.color};margin-right:6px;"></span>${r.label}
+          </div>`).join('');
       }
     });
   </script>
