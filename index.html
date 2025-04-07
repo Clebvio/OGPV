@@ -41,6 +41,7 @@
   <div id="map"></div>
   <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
+
   <div id="progress-container" style="
     position: absolute;
     top: 10px;
@@ -82,7 +83,6 @@
       "#7cd2e1", "#93e9e7", "#c7f7c6", "#f8ff8a"
     ]).domain([OGIRRI_MIN, OGIRRI_MAX]);
 
-    // Dark basemap with labels, borders, roads on top
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; CARTO, OpenStreetMap contributors',
       subdomains: 'abcd',
@@ -147,8 +147,8 @@
     }
 
     function updateLegend(title, colors) {
-      legend.innerHTML = `<strong>${title}</strong><br>` + colors.map(r => `
-        <div><span style="display:inline-block;width:16px;height:12px;background:${r};margin-right:6px;"></span>${r}</div>
+      legend.innerHTML = `<strong>${title}</strong><br>` + colors.map(c => `
+        <div><span style="display:inline-block;width:16px;height:12px;background:${c};margin-right:6px;"></span>${c}</div>
       `).join('');
     }
 
@@ -162,6 +162,8 @@
             opacity: 0.85,
             resolution: 128,
             zIndex: 1,
+            name,
+            discreteColors, // ✅ Pass into options
             pixelValuesToColorFn: val => {
               if (val == null || val < valueMin || val > valueMax) return null;
               return useChroma
@@ -185,7 +187,7 @@
         .catch(err => console.error(`❌ ${name} load failed:`, err));
     }
 
-    // Hover info
+    // Hover readout
     map.on('mousemove', e => {
       if (!activeLayer || typeof activeLayer.getValueAtLatLng !== 'function') return;
       activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
@@ -195,7 +197,6 @@
       });
     });
 
-    // Update legend when switching
     map.on('overlayadd', function(e) {
       const layer = layers[e.name];
       if (layer) {
@@ -203,12 +204,12 @@
         if (e.name === "OGIRRI") {
           updateGradientLegend("OGIRRI", ogirriGradient);
         } else if (e.name === "OGTILT") {
-          updateLegend("OGTILT", layers["OGTILT"].options.discreteColors.map(d => d.color));
+          const dc = layer.options.discreteColors;
+          if (dc) updateLegend("OGTILT", dc.map(d => d.color));
         }
       }
     });
 
-    // Load the layers
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
