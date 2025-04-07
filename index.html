@@ -156,18 +156,17 @@
 
           // 🖱 Hover support only after load
           layer.on("load", () => {
-            map.on("mousemove", function(e) {
-              if (!map.hasLayer(layer)) return;
-              if (typeof layer.getValueAtLatLng === "function") {
-                layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-                  if (val && val[0] != null) {
-                    info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
-                  } else {
-                    info.innerHTML = "No data here…";
-                  }
-                });
-              }
-            });
+          map.on("mousemove", function(e) {
+            const activeLayer = Object.values(layers).find(l => map.hasLayer(l));
+            if (activeLayer?.getValueAtLatLng) {
+              activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+                if (val && val[0] != null) {
+                  info.innerHTML = `${activeLayer.options.name}: <strong>${val[0].toFixed(2)}</strong>`;
+                } else {
+                  info.innerHTML = "No data here…";
+                }
+              });
+            }
           });
 
           console.log(`✅ Registered: ${name}`);
