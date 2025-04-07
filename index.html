@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; cursor: crosshair; }
-
     .info {
       position: absolute;
       bottom: 20px;
@@ -19,7 +18,6 @@
       border-radius: 4px;
       z-index: 1000;
     }
-
     .legend {
       position: absolute;
       bottom: 20px;
@@ -32,19 +30,16 @@
       z-index: 1000;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
     }
-
     .legend-item {
       display: flex;
       align-items: center;
       margin-bottom: 2px;
     }
-
     .legend-color {
       width: 16px;
       height: 12px;
       margin-right: 6px;
     }
-
     #progressContainer {
       position: absolute;
       top: 10px;
@@ -77,15 +72,16 @@
       preferCanvas: true
     }).setView([51, -96], 4);
 
-    const tileBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors & CartoDB',
-      zIndex: 1 // ✅ Base tile below raster
+    // 🟫 Dark gray background with visible road data
+    const baseTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap & CartoDB',
+      zIndex: 1
     }).addTo(map);
 
-    // ✅ Add vector data (borders, cities, roads)
-    const vectorLabels = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      opacity: 0.5,
-      zIndex: 1000 // Always on top
+    // 🏙 Vector labels: cities, roads, borders
+    const osmLabels = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+      opacity: 0.7,
+      zIndex: 1000
     }).addTo(map);
 
     const info = document.getElementById("info");
@@ -148,19 +144,6 @@
             updateLegend(name, ranges, isGradient);
           }
 
-          map.on("mousemove", function(e) {
-            if (!map.hasLayer(layer)) return;
-            if (typeof layer.getValueAtLatLng === "function") {
-              layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-                if (val && val[0] != null) {
-                  info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
-                } else {
-                  info.innerHTML = "No data here…";
-                }
-              });
-            }
-          });
-
           console.log(`✅ Registered: ${name}`);
           progress.style.display = "none";
         })
@@ -170,7 +153,7 @@
         });
     }
 
-    // ✅ OGIRRI - gradient
+    // 🟢 OGIRRI: Smooth Gradient
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -178,28 +161,16 @@
       valueMax: 1680,
       isGradient: true,
       colorScale: chroma.scale([
-        "#ffffff", // 800
-        "#191919", // 923.07
-        "#4e4e4e", // 1170.19
-        "#6a6a6a", // 1279.48
-        "#7cd2e1", // 1425.19
-        "#93e9e7", // 1490.18
-        "#c7f7c6", // 1588.63
-        "#f8ff8a"  // 1619.15
+        "#ffffff", "#191919", "#4e4e4e", "#6a6a6a",
+        "#7cd2e1", "#93e9e7", "#c7f7c6", "#f8ff8a"
       ]).domain([
-        800,
-        923.07,
-        1170.19,
-        1279.48,
-        1425.19,
-        1490.18,
-        1588.63,
-        1619.15
+        800, 923.07, 1170.19, 1279.48,
+        1425.19, 1490.18, 1588.63, 1619.15
       ]).mode("lrgb"),
-      ranges: []
+      ranges: [] // gradient legend
     });
 
-    // ✅ OGTILT - stepped
+    // 🟣 OGTILT: Discrete Steps
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -235,6 +206,20 @@
     map.on("overlayadd", function(e) {
       const layer = layers[e.name];
       if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
+    });
+
+    // 🖱 Hover label support
+    map.on("mousemove", function(e) {
+      const activeLayer = Object.values(layers).find(l => map.hasLayer(l));
+      if (activeLayer?.getValueAtLatLng) {
+        activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+          if (val && val[0] != null) {
+            info.innerHTML = `<strong>${val[0].toFixed(2)}</strong>`;
+          } else {
+            info.innerHTML = "No data here…";
+          }
+        });
+      }
     });
   </script>
 </body>
