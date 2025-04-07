@@ -8,9 +8,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
     html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
+      height: 100%; margin: 0; padding: 0;
     }
     .info {
       position: absolute;
@@ -33,12 +31,7 @@
       border-radius: 5px;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
       z-index: 1000;
-    }
-    .legend-color {
-      width: 20px;
-      height: 12px;
-      display: inline-block;
-      margin-right: 6px;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -47,18 +40,19 @@
   <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
 
-  <!-- Leaflet & GeoTIFF Support -->
+  <!-- Leaflet & Plugins -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   <script src="https://unpkg.com/georaster"></script>
   <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
 
   <script>
+    const OGIRRI_MIN = 800;
+    const OGIRRI_MAX = 1600;
+
     const map = L.map('map').setView([51, -96], 4);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: 'abcd',
-      maxZoom: 19
+      attribution: '&copy; OpenStreetMap & CartoDB'
     }).addTo(map);
 
     const info = document.getElementById('info');
@@ -69,17 +63,27 @@
         map.setView(e.geocode.center, 12);
       }).addTo(map);
 
-    function updateLegend(title, ranges) {
-      legend.innerHTML = `<strong>${title}</strong><br>` + ranges.map(r => `
-        <div><span class="legend-color" style="background:${r.color}"></span>${r.label}</div>
-      `).join('');
+    function updateLegend(title, gradientColors) {
+      legend.innerHTML = `
+        <div style="margin-bottom: 4px;"><strong>${title}</strong></div>
+        <div style="
+          height: 12px;
+          width: 180px;
+          background: linear-gradient(to right, ${gradientColors.join(',')});
+          border: 1px solid #aaa;
+          margin-bottom: 4px;
+        "></div>
+        <div style="display: flex; justify-content: space-between; font-size: 10px;">
+          <span>${OGIRRI_MIN}</span><span>${OGIRRI_MAX}</span>
+        </div>
+      `;
     }
 
     const layers = {};
+    const overlayControl = L.control.layers(null, {}).addTo(map);
 
     function loadGeoTIFFLayer({ name, url, colorScale, ranges, valueMin, valueMax }) {
       console.log(`Attempting to load ${name}...`);
-
       fetch(url)
         .then(r => r.arrayBuffer())
         .then(parseGeoraster)
@@ -94,39 +98,32 @@
               return colorScale(v);
             }
           });
-
-          console.log(`✅ Registered: ${name}`);
-
           layer._legend = ranges;
           layers[name] = layer;
           overlayControl.addOverlay(layer, name);
-
           if (Object.keys(layers).length === 1) {
             map.addLayer(layer);
-            updateLegend(name, ranges);
+            if (name === "OGIRRI") {
+              updateLegend(name, [
+                "#303030", "#4e6b6e", "#6aa6ad", "#90d5dc",
+                "#b2ebf2", "#d0f3de", "#f1f8c0", "#fffbc1"
+              ]);
+            }
           }
-
           map.on('mousemove', function(e) {
-            Object.entries(layers).forEach(([name, layer]) => {
-              if (!map.hasLayer(layer)) return;
-              if (typeof layer.getValueAtLatLng === 'function') {
-                layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-                  if (val && val[0] != null) {
-                    info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
-                  } else {
-                    info.innerHTML = "No data here…";
-                  }
-                });
-              }
-            });
+            if (!map.hasLayer(layer)) return;
+            if (typeof layer.getValueAtLatLng === 'function') {
+              layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+                if (val && val[0] != null) {
+                  info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
+                } else {
+                  info.innerHTML = "No data here…";
+                }
+              });
+            }
           });
-        })
-        .catch(err => {
-          console.error(`❌ Failed to load "${name}" from ${url}`, err);
-        });
+        }).catch(err => console.error(`❌ Failed to load ${name}:`, err));
     }
-
-    const overlayControl = L.control.layers(null, {}).addTo(map);
 
     loadGeoTIFFLayer({
       name: "OGIRRI",
@@ -134,23 +131,15 @@
       valueMin: 800,
       valueMax: 1600,
       colorScale: val => {
-        if (val < 923) return "#191919";
-        if (val < 1170) return "#4e4e4e";
-        if (val < 1279) return "#6a6a6a";
-        if (val < 1425) return "#7cd2e1";
-        if (val < 1490) return "#93e9e7";
-        if (val < 1588) return "#c7f7c6";
-        return "#f8ff8a";
+        if (val < 923) return "#303030";
+        if (val < 1170) return "#4e6b6e";
+        if (val < 1279) return "#6aa6ad";
+        if (val < 1425) return "#90d5dc";
+        if (val < 1490) return "#b2ebf2";
+        if (val < 1588) return "#d0f3de";
+        return "#fffbc1";
       },
-      ranges: [
-        { label: "≤ 923", color: "#191919" },
-        { label: "≤ 1170", color: "#4e4e4e" },
-        { label: "≤ 1279", color: "#6a6a6a" },
-        { label: "≤ 1425", color: "#7cd2e1" },
-        { label: "≤ 1490", color: "#93e9e7" },
-        { label: "≤ 1588", color: "#c7f7c6" },
-        { label: "> 1588", color: "#f8ff8a" }
-      ]
+      ranges: []
     });
 
     loadGeoTIFFLayer({
@@ -183,10 +172,15 @@
       ]
     });
 
-    map.on('overlayadd', function(e) {
+    map.on('overlayadd', function (e) {
       const layer = layers[e.name];
-      if (layer && layer._legend) {
-        updateLegend(e.name, layer._legend);
+      if (e.name === "OGIRRI") {
+        updateLegend("OGIRRI", [
+          "#303030", "#4e6b6e", "#6aa6ad", "#90d5dc",
+          "#b2ebf2", "#d0f3de", "#f1f8c0", "#fffbc1"
+        ]);
+      } else if (layer && layer._legend) {
+        updateLegend(e.name, layer._legend.map(r => r.color));
       }
     });
   </script>
