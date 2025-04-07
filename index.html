@@ -7,13 +7,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      cursor: crosshair;
-      background-color: #2e2e2e; /* prevents white flash */
-    }
+    html, body, #map { height: 100%; margin: 0; padding: 0; cursor: crosshair; }
     .info {
       position: absolute;
       bottom: 20px;
@@ -76,22 +70,13 @@
   <script>
     const map = L.map('map', { preferCanvas: true }).setView([51, -96], 4);
 
-    // Create custom pane for labels
-    map.createPane('labels');
-    map.getPane('labels').style.zIndex = 650;
-    map.getPane('labels').style.pointerEvents = 'none';
-
-    // Dark gray base
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
-      maxZoom: 16
+    // Dark gray base with labels
+    const base = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '&copy; Esri & contributors', maxZoom: 16
     }).addTo(map);
 
-    // Labels, cities, roads
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
-      maxZoom: 16,
-      pane: 'labels'
+    const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 16, zIndex: 1000
     }).addTo(map);
 
     const info = document.getElementById("info");
@@ -154,21 +139,6 @@
             updateLegend(name, ranges, isGradient);
           }
 
-          // 🖱 Hover support only after load
-          layer.on("load", () => {
-          map.on("mousemove", function(e) {
-            const activeLayer = Object.values(layers).find(l => map.hasLayer(l));
-            if (activeLayer?.getValueAtLatLng) {
-              activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-                if (val && val[0] != null) {
-                  info.innerHTML = `${activeLayer.options.name}: <strong>${val[0].toFixed(2)}</strong>`;
-                } else {
-                  info.innerHTML = "No data here…";
-                }
-              });
-            }
-          });
-
           console.log(`✅ Registered: ${name}`);
           progress.style.display = "none";
         })
@@ -178,7 +148,6 @@
         });
     }
 
-    // OGIRRI — gradient from QGIS
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -192,10 +161,9 @@
         800, 923.07, 1170.19, 1279.48,
         1425.19, 1490.18, 1588.63, 1619.15
       ]).mode("lrgb"),
-      ranges: [] // gradient
+      ranges: []
     });
 
-    // OGTILT — stepped
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -231,6 +199,20 @@
     map.on("overlayadd", function(e) {
       const layer = layers[e.name];
       if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
+    });
+
+    // 🖱 Tooltip
+    map.on("mousemove", function(e) {
+      const activeLayer = Object.values(layers).find(l => map.hasLayer(l));
+      if (activeLayer?.getValueAtLatLng) {
+        activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+          if (val && val[0] != null) {
+            info.innerHTML = `<strong>${val[0].toFixed(2)}</strong>`;
+          } else {
+            info.innerHTML = "No data here…";
+          }
+        });
+      }
     });
   </script>
 </body>
