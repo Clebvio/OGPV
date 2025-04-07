@@ -1,22 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <title>Solar Resource Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; background: #1c1c1c; }
+    html, body, #map { height: 100%; margin: 0; padding: 0; }
     .info {
       position: absolute;
       bottom: 20px;
       left: 10px;
       background: white;
       padding: 6px 12px;
-      border-radius: 4px;
       font-size: 14px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      border-radius: 4px;
       z-index: 1000;
     }
     .legend {
@@ -26,170 +25,188 @@
       background: white;
       padding: 10px;
       font-size: 12px;
-      border-radius: 5px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      border-radius: 4px;
+      line-height: 1.4;
       z-index: 1000;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
     }
-    .legend-gradient {
-      height: 12px;
-      width: 200px;
-      background: linear-gradient(to right, #191919, #4e4e4e, #6a6a6a, #7cd2e1, #93e9e7, #c7f7c6, #f8ff8a);
-      margin-bottom: 5px;
-    }
-    .legend-labels {
+    .legend-item {
       display: flex;
-      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
     }
     .legend-color {
       width: 16px;
       height: 12px;
       margin-right: 6px;
-      display: inline-block;
+    }
+    #progressContainer {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      padding: 6px 12px;
+      font-size: 14px;
+      border-radius: 4px;
+      display: none;
+      z-index: 1001;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div class="info" id="info">Hover over the map to see values…</div>
-  <div class="legend" id="legend">Legend loading...</div>
+  <div class="legend" id="legend">Legend will load with data layer.</div>
+  <div id="progressContainer">Loading…</div>
 
-  <!-- Libraries -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   <script src="https://unpkg.com/georaster"></script>
   <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
-  <script src="https://unpkg.com/chroma-js@2.1.0/chroma.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
 
   <script>
     const map = L.map('map', {
       preferCanvas: true
     }).setView([51, -96], 4);
 
-    // Dark basemap with roads/borders/labels
-    const basemap = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+    const tileBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap contributors & CartoDB'
     }).addTo(map);
 
-    const info = document.getElementById('info');
-    const legend = document.getElementById('legend');
+    const info = document.getElementById("info");
+    const legend = document.getElementById("legend");
+    const progress = document.getElementById("progressContainer");
 
-    L.Control.geocoder({
-      defaultMarkGeocode: true
-    }).on('markgeocode', function(e) {
-      map.setView(e.geocode.center, 12);
+    L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', function(e) {
+      map.setView(e.geocode.center, 10);
     }).addTo(map);
 
-    const layers = {};
-    const overlayControl = L.control.layers(null, {}).addTo(map);
-
-    function updateLegend(layerName, type, data) {
-      if (type === "gradient") {
-        legend.innerHTML = `
-          <strong>${layerName}</strong>
-          <div class="legend-gradient"></div>
-          <div class="legend-labels">
+    function updateLegend(title, ranges, isGradient = false) {
+      if (isGradient) {
+        let gradientHTML = `
+          <strong>${title}</strong><br>
+          <div style="background: linear-gradient(to right, #ffffff, #4e4e4e, #6a6a6a, #7cd2e1, #93e9e7, #c7f7c6, #f8ff8a);
+                      height: 15px; width: 150px; margin-bottom: 5px; border: 1px solid #ccc;"></div>
+          <div style="display: flex; justify-content: space-between;">
             <span>800</span><span>1600</span>
-          </div>
-        `;
+          </div>`;
+        legend.innerHTML = gradientHTML;
       } else {
-        legend.innerHTML = `<strong>${layerName}</strong><br>` + data.map(r => `
-          <div><span class="legend-color" style="background:${r.color}"></span>${r.label}</div>
-        `).join('');
+        legend.innerHTML = `<strong>${title}</strong><br>` + ranges.map(r => `
+          <div class="legend-item">
+            <div class="legend-color" style="background:${r.color}"></div>${r.label}
+          </div>`).join('');
       }
     }
 
-    function loadGeoTIFFLayer({ name, url, min, max, colorFn, legendType, legendData }) {
-      console.log(`🛰️ Attempting to load ${name}...`);
+    const layers = {};
+    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
+
+    function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
+      console.log("🛰️ Attempting to load " + name + "...");
+      progress.innerText = `Loading ${name}...`;
+      progress.style.display = "block";
 
       fetch(url)
-        .then(r => r.arrayBuffer())
+        .then(res => res.arrayBuffer())
         .then(parseGeoraster)
         .then(georaster => {
           const layer = new GeoRasterLayer({
             georaster,
+            resolution: 128, // better zoomed-out detail
             opacity: 0.85,
-            resolution: 128,
             pixelValuesToColorFn: values => {
-              const v = values[0];
-              if (v == null || v < min || v > max) return null;
-              return colorFn(v);
+              const val = values[0];
+              if (val == null || val < valueMin || val > valueMax) return null;
+              return colorScale(val);
             }
           });
 
-          layer._legend = legendData;
-          layer._legendType = legendType;
           layers[name] = layer;
+          layer._legend = ranges;
+          layer._isGradient = isGradient;
+
           overlayControl.addOverlay(layer, name);
 
           if (Object.keys(layers).length === 1) {
             map.addLayer(layer);
-            updateLegend(name, legendType, legendData);
+            updateLegend(name, ranges, isGradient);
           }
 
+          map.on("mousemove", function(e) {
+            if (!map.hasLayer(layer)) return;
+            if (typeof layer.getValueAtLatLng === "function") {
+              layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+                if (val && val[0] != null) {
+                  info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
+                } else {
+                  info.innerHTML = "No data here…";
+                }
+              });
+            }
+          });
+
           console.log(`✅ Registered: ${name}`);
+          progress.style.display = "none";
         })
-        .catch(err => console.error(`❌ ${name} load failed:`, err));
+        .catch(err => {
+          console.error(`❌ ${name} load failed:`, err);
+          progress.style.display = "none";
+        });
     }
 
-    // OGIRRI (Gradient)
-    const gradientScale = chroma.scale(['#191919', '#4e4e4e', '#6a6a6a', '#7cd2e1', '#93e9e7', '#c7f7c6', '#f8ff8a']).domain([800, 1600]);
+    // OGIRRI (gradient)
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
-      min: 800,
-      max: 1600,
-      colorFn: val => gradientScale(val).hex(),
-      legendType: "gradient",
-      legendData: null
+      valueMin: 800,
+      valueMax: 1600,
+      isGradient: true,
+      colorScale: chroma.scale([
+        '#ffffff', '#4e4e4e', '#6a6a6a', '#7cd2e1', '#93e9e7', '#c7f7c6', '#f8ff8a'
+      ]).domain([800, 1600]),
+      ranges: [] // unused for gradient legend
     });
 
-    // OGTILT (Discrete)
-    const ogtiltRanges = [
-      { value: 30.625, color: "rgb(48,18,59)", label: "≤ 32" },
-      { value: 32.25, color: "rgb(65,67,167)", label: "≤ 34" },
-      { value: 33.875, color: "rgb(71,113,233)", label: "≤ 36" },
-      { value: 35.5, color: "rgb(62,156,254)", label: "≤ 38" },
-      { value: 37.125, color: "rgb(33,198,225)", label: "≤ 40" },
-      { value: 38.75, color: "rgb(27,229,181)", label: "≤ 42" },
-      { value: 40.375, color: "rgb(72,248,130)", label: "≤ 44" },
-      { value: 42, color: "rgb(137,255,77)", label: "≤ 46" },
-      { value: 43.625, color: "rgb(187,245,52)", label: "≤ 48" },
-      { value: 45.25, color: "rgb(226,220,56)", label: "> 48" }
-    ];
+    // OGTILT (stepped)
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
-      min: 29,
-      max: 55,
-      colorFn: val => {
-        for (const r of ogtiltRanges) {
-          if (val <= r.value) return r.color;
-        }
-        return "rgb(122,4,3)";
+      valueMin: 29,
+      valueMax: 55,
+      isGradient: false,
+      colorScale: val => {
+        if (val < 32) return "#30123b";
+        if (val < 34) return "#4143a7";
+        if (val < 36) return "#3e9cfe";
+        if (val < 38) return "#21c6e1";
+        if (val < 40) return "#48f882";
+        if (val < 42) return "#bbf534";
+        if (val < 44) return "#fbb938";
+        if (val < 46) return "#ef5911";
+        if (val < 48) return "#d43305";
+        return "#7a0403";
       },
-      legendType: "discrete",
-      legendData: ogtiltRanges
+      ranges: [
+        { label: "≤ 32", color: "#30123b" },
+        { label: "≤ 34", color: "#4143a7" },
+        { label: "≤ 36", color: "#3e9cfe" },
+        { label: "≤ 38", color: "#21c6e1" },
+        { label: "≤ 40", color: "#48f882" },
+        { label: "≤ 42", color: "#bbf534" },
+        { label: "≤ 44", color: "#fbb938" },
+        { label: "≤ 46", color: "#ef5911" },
+        { label: "≤ 48", color: "#d43305" },
+        { label: "> 48", color: "#7a0403" }
+      ]
     });
 
     map.on("overlayadd", function(e) {
       const layer = layers[e.name];
-      if (layer) {
-        updateLegend(e.name, layer._legendType, layer._legend);
-      }
-    });
-
-    map.on("mousemove", function(e) {
-      Object.entries(layers).forEach(([name, layer]) => {
-        if (map.hasLayer(layer) && typeof layer.getValueAtLatLng === "function") {
-          layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-            if (val && val[0] != null) {
-              info.innerHTML = `${name}: <strong>${val[0].toFixed(2)}</strong>`;
-            } else {
-              info.innerHTML = "No data here…";
-            }
-          });
-        }
-      });
+      if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
     });
   </script>
 </body>
