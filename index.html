@@ -7,7 +7,12 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; cursor: crosshair; }
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      cursor: crosshair;
+    }
     .info {
       position: absolute;
       bottom: 20px;
@@ -53,17 +58,6 @@
       display: none;
       z-index: 1001;
     }
-    #tooltip {
-      position: absolute;
-      pointer-events: none;
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 4px 8px;
-      font-size: 12px;
-      border-radius: 4px;
-      z-index: 9999;
-      display: none;
-    }
   </style>
 </head>
 <body>
@@ -71,195 +65,9 @@
   <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
   <div id="progressContainer">Loading…</div>
-  <div id="tooltip"></div>
 
-  <!-- Dependencies -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   <script src="https://unpkg.com/georaster"></script>
   <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
-
-  <script>
-    const map = L.map('map', {
-      preferCanvas: true
-    }).setView([51, -118], 4);
-
-    // Dark gray basemap
-    const baseTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
-      maxZoom: 16
-    }).addTo(map);
-
-    const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 16,
-      zIndex: 1000
-    }).addTo(map);
-
-    const tooltip = document.getElementById("tooltip");
-    const legend = document.getElementById("legend");
-    const progress = document.getElementById("progressContainer");
-
-    L.Control.geocoder({ defaultMarkGeocode: true }).on("markgeocode", function (e) {
-      map.setView(e.geocode.center, 10);
-      showBothValuesAt(e.geocode.center.lat, e.geocode.center.lng);
-    }).addTo(map);
-
-    function updateLegend(title, ranges, isGradient = false) {
-      if (isGradient) {
-        legend.innerHTML = `
-          <strong>${title}</strong><br>
-          <div style="background: linear-gradient(to right, #ffffff, #191919, #4e4e4e, #6a6a6a, #7cd2e1, #93e9e7, #c7f7c6, #f8ff8a);
-                      height: 15px; width: 150px; margin-bottom: 5px; border: 1px solid #ccc;"></div>
-          <div style="display: flex; justify-content: space-between;">
-            <span>800</span><span>1600</span>
-          </div>`;
-      } else {
-        legend.innerHTML = `<strong>${title}</strong><br>` + ranges.map(r => `
-          <div class="legend-item">
-            <div class="legend-color" style="background:${r.color}"></div>${r.label}
-          </div>`).join('');
-      }
-    }
-
-    const layers = {};
-    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
-
-    function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
-      console.log("🛰️ Attempting to load " + name + "...");
-      progress.innerText = `Loading ${name}...`;
-      progress.style.display = "block";
-
-      fetch(url)
-        .then(res => res.arrayBuffer())
-        .then(parseGeoraster)
-        .then(georaster => {
-          const layer = new GeoRasterLayer({
-            georaster,
-            resolution: 128,
-            opacity: 0.85,
-            pixelValuesToColorFn: values => {
-              const val = values[0];
-              if (val == null || val < valueMin || val > valueMax) return null;
-              return typeof colorScale === "function" ? colorScale(val) : colorScale;
-            },
-            zIndex: 10
-          });
-
-          layers[name] = layer;
-          layer._legend = ranges;
-          layer._isGradient = isGradient;
-
-          overlayControl.addOverlay(layer, name);
-          if (name === "OGIRRI") {
-            map.addLayer(layer); // load OGIRRI by default
-            updateLegend(name, ranges, isGradient);
-          }
-
-          console.log(`✅ Registered: ${name}`);
-          progress.style.display = "none";
-        })
-        .catch(err => {
-          console.error(`❌ ${name} load failed:`, err);
-          progress.style.display = "none";
-        });
-    }
-
-    // OGIRRI: Smooth Gradient
-    loadGeoTIFFLayer({
-      name: "OGIRRI",
-      url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
-      valueMin: 800,
-      valueMax: 1680,
-      isGradient: true,
-      colorScale: chroma.scale([
-        "#ffffff", "#191919", "#4e4e4e", "#6a6a6a",
-        "#7cd2e1", "#93e9e7", "#c7f7c6", "#f8ff8a"
-      ]).domain([
-        800, 923.07, 1170.19, 1279.48,
-        1425.19, 1490.18, 1588.63, 1619.15
-      ]).mode("lrgb"),
-      ranges: []
-    });
-
-    // OGTILT: Stepped
-    loadGeoTIFFLayer({
-      name: "OGTILT",
-      url: "https://clebvio.github.io/OGPV/OGTILT.tif",
-      valueMin: 29,
-      valueMax: 55,
-      isGradient: false,
-      colorScale: val => {
-        if (val < 32) return "#30123b";
-        if (val < 34) return "#4143a7";
-        if (val < 36) return "#3e9cfe";
-        if (val < 38) return "#21c6e1";
-        if (val < 40) return "#48f882";
-        if (val < 42) return "#bbf534";
-        if (val < 44) return "#fbb938";
-        if (val < 46) return "#ef5911";
-        if (val < 48) return "#d43305";
-        return "#7a0403";
-      },
-      ranges: [
-        { label: "≤ 32", color: "#30123b" },
-        { label: "≤ 34", color: "#4143a7" },
-        { label: "≤ 36", color: "#3e9cfe" },
-        { label: "≤ 38", color: "#21c6e1" },
-        { label: "≤ 40", color: "#48f882" },
-        { label: "≤ 42", color: "#bbf534" },
-        { label: "≤ 44", color: "#fbb938" },
-        { label: "≤ 46", color: "#ef5911" },
-        { label: "≤ 48", color: "#d43305" },
-        { label: "> 48", color: "#7a0403" }
-      ]
-    });
-
-    // Hover floating label
-    map.on("mousemove", function (e) {
-      tooltip.style.left = `${e.originalEvent.clientX + 10}px`;
-      tooltip.style.top = `${e.originalEvent.clientY + 10}px`;
-
-      const activeLayer = Object.values(layers).find(l => map.hasLayer(l));
-      if (activeLayer?.getValueAtLatLng) {
-        activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-          if (val && val[0] != null) {
-            tooltip.style.display = "block";
-            tooltip.innerHTML = `${val[0].toFixed(2)} W/m²`;
-          } else {
-            tooltip.style.display = "none";
-          }
-        });
-      }
-    });
-
-    map.on("mouseout", () => {
-      tooltip.style.display = "none";
-    });
-
-    // Popup on click showing both values
-    map.on("click", function (e) {
-      const promises = Object.entries(layers).map(([name, layer]) => {
-        if (map.hasLayer(layer) && layer.getValueAtLatLng) {
-          return layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => ({
-            name,
-            value: val && val[0] != null ? val[0].toFixed(2) : "No data"
-          }));
-        } else {
-          return Promise.resolve({ name, value: "No data" });
-        }
-      });
-
-      Promise.all(promises).then(results => {
-        const html = results.map(r => `<strong>${r.name}</strong>: ${r.value}`).join("<br>");
-        L.popup().setLatLng(e.latlng).setContent(html).openOn(map);
-      });
-    });
-
-    map.on("overlayadd", function (e) {
-      const layer = layers[e.name];
-      if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
-    });
-  </script>
-</body>
-</html>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs
