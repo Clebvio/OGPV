@@ -53,6 +53,17 @@
       display: none;
       z-index: 1001;
     }
+    #tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 4px;
+      z-index: 9999;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -60,7 +71,9 @@
   <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
   <div id="progressContainer">Loading…</div>
+  <div id="tooltip"></div>
 
+  <!-- Dependencies -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   <script src="https://unpkg.com/georaster"></script>
@@ -70,26 +83,26 @@
   <script>
     const map = L.map('map', {
       preferCanvas: true
-    }).setView([50, -112], 6); // Centered near Alberta
+    }).setView([51, -118], 4);
 
+    // Dark gray basemap
     const baseTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
       attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
       maxZoom: 16
     }).addTo(map);
 
     const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
       maxZoom: 16,
       zIndex: 1000
     }).addTo(map);
 
-    const info = document.getElementById("info");
+    const tooltip = document.getElementById("tooltip");
     const legend = document.getElementById("legend");
     const progress = document.getElementById("progressContainer");
 
-    L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', function(e) {
+    L.Control.geocoder({ defaultMarkGeocode: true }).on("markgeocode", function (e) {
       map.setView(e.geocode.center, 10);
-      showBothValuesAt(e.geocode.center);
+      showBothValuesAt(e.geocode.center.lat, e.geocode.center.lng);
     }).addTo(map);
 
     function updateLegend(title, ranges, isGradient = false) {
@@ -138,10 +151,8 @@
           layer._isGradient = isGradient;
 
           overlayControl.addOverlay(layer, name);
-
-          // ✅ Show OGIRRI by default only once
           if (name === "OGIRRI") {
-            map.addLayer(layer);
+            map.addLayer(layer); // load OGIRRI by default
             updateLegend(name, ranges, isGradient);
           }
 
@@ -154,48 +165,7 @@
         });
     }
 
-    function showBothValuesAt(latlng) {
-      const promises = Object.entries(layers).map(([name, layer]) => {
-        if (map.hasLayer(layer) && typeof layer.getValueAtLatLng === "function") {
-          return layer.getValueAtLatLng(latlng.lat, latlng.lng).then(val => {
-            return { name, value: val ? val[0] : null };
-          });
-        } else {
-          return Promise.resolve({ name, value: null });
-        }
-      });
-
-      Promise.all(promises).then(results => {
-        const output = results.map(r =>
-          r.value != null
-            ? `${r.name}: <strong>${r.value.toFixed(2)}</strong>`
-            : `${r.name}: <em>No data</em>`
-        ).join("<br>");
-        L.popup()
-          .setLatLng(latlng)
-          .setContent(output)
-          .openOn(map);
-      });
-    }
-
-    map.on("click", function(e) {
-      showBothValuesAt(e.latlng);
-    });
-
-    map.on("mousemove", function(e) {
-      const activeLayer = Object.values(layers).find(l => map.hasLayer(l));
-      if (activeLayer?.getValueAtLatLng) {
-        activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-          if (val && val[0] != null) {
-            info.innerHTML = `<strong>${val[0].toFixed(2)}</strong>`;
-          } else {
-            info.innerHTML = "No data here…";
-          }
-        });
-      }
-    });
-
-    // 🟢 OGIRRI
+    // OGIRRI: Smooth Gradient
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -212,7 +182,7 @@
       ranges: []
     });
 
-    // 🟣 OGTILT
+    // OGTILT: Stepped
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -245,11 +215,51 @@
       ]
     });
 
-    map.on("overlayadd", function(e) {
+    // Hover floating label
+    map.on("mousemove", function (e) {
+      tooltip.style.left = `${e.originalEvent.clientX + 10}px`;
+      tooltip.style.top = `${e.originalEvent.clientY + 10}px`;
+
+      const activeLayer = Object.values(layers).find(l => map.hasLayer(l));
+      if (activeLayer?.getValueAtLatLng) {
+        activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+          if (val && val[0] != null) {
+            tooltip.style.display = "block";
+            tooltip.innerHTML = `${val[0].toFixed(2)} W/m²`;
+          } else {
+            tooltip.style.display = "none";
+          }
+        });
+      }
+    });
+
+    map.on("mouseout", () => {
+      tooltip.style.display = "none";
+    });
+
+    // Popup on click showing both values
+    map.on("click", function (e) {
+      const promises = Object.entries(layers).map(([name, layer]) => {
+        if (map.hasLayer(layer) && layer.getValueAtLatLng) {
+          return layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => ({
+            name,
+            value: val && val[0] != null ? val[0].toFixed(2) : "No data"
+          }));
+        } else {
+          return Promise.resolve({ name, value: "No data" });
+        }
+      });
+
+      Promise.all(promises).then(results => {
+        const html = results.map(r => `<strong>${r.name}</strong>: ${r.value}`).join("<br>");
+        L.popup().setLatLng(e.latlng).setContent(html).openOn(map);
+      });
+    });
+
+    map.on("overlayadd", function (e) {
       const layer = layers[e.name];
       if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
     });
   </script>
 </body>
 </html>
-
