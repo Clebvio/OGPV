@@ -7,16 +7,21 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; cursor: crosshair; }
-    .info {
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      cursor: crosshair;
+    }
+    .info-box {
       position: absolute;
-      bottom: 20px;
-      left: 10px;
-      background: white;
-      padding: 6px 12px;
-      font-size: 14px;
+      pointer-events: none;
+      background: rgba(0, 0, 0, 0.75);
+      color: white;
+      padding: 6px 10px;
       border-radius: 4px;
-      z-index: 1000;
+      font-size: 13px;
+      z-index: 1001;
     }
     .legend {
       position: absolute;
@@ -57,7 +62,7 @@
 </head>
 <body>
   <div id="map"></div>
-  <div class="info" id="info">Hover over the map to see values…</div>
+  <div class="info-box" id="cursorInfo" style="display: none;"></div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
   <div id="progressContainer">Loading…</div>
 
@@ -70,28 +75,22 @@
   <script>
     const map = L.map('map', {
       preferCanvas: true
-    });
+    }).setView([51, -112.5], 5);
 
-    const bounds = [[45, -118], [55, -107]];
-    map.fitBounds(bounds);
-
-    const baseTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
-      maxZoom: 16
-    }).addTo(map);
-
+    // Esri dark gray basemap with city/road labels
+    const base = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}');
     const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 16,
       zIndex: 1000
-    }).addTo(map);
+    });
+    base.addTo(map);
+    labels.addTo(map);
 
-    const info = document.getElementById("info");
     const legend = document.getElementById("legend");
+    const cursorInfo = document.getElementById("cursorInfo");
     const progress = document.getElementById("progressContainer");
+    const layers = {};
 
-    L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', function(e) {
-      map.setView(e.geocode.center, 10);
-    }).addTo(map);
+    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
 
     function updateLegend(title, ranges, isGradient = false) {
       if (isGradient) {
@@ -110,51 +109,105 @@
       }
     }
 
-    const layers = {};
-    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
-
-    function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
-      console.log("🛰️ Attempting to load " + name + "...");
-      progress.innerText = `Loading ${name}...`;
+    async function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
+      console.log(`🛰️ Starting download: ${name}`);
+      progress.innerText = `Downloading ${name}… 0%`;
       progress.style.display = "block";
 
-      fetch(url)
-        .then(res => res.arrayBuffer())
-        .then(parseGeoraster)
-        .then(georaster => {
-          const layer = new GeoRasterLayer({
-            georaster,
-            resolution: 128,
-            opacity: 0.85,
-            pixelValuesToColorFn: values => {
-              const val = values[0];
-              if (val == null || val < valueMin || val > valueMax) return null;
-              return typeof colorScale === "function" ? colorScale(val) : colorScale;
-            },
-            zIndex: 10
-          });
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", url, true);
+      xhr.responseType = "arraybuffer";
 
-          layers[name] = layer;
-          layer._legend = ranges;
-          layer._isGradient = isGradient;
+      xhr.onprogress = function (evt) {
+        if (evt.lengthComputable) {
+          const percent = Math.round((evt.loaded / evt.total) * 100);
+          progress.innerText = `Downloading ${name}… ${percent}%`;
+        }
+      };
 
-          overlayControl.addOverlay(layer, name);
+      xhr.onload = async function () {
+        const buffer = xhr.response;
+        const georaster = await parseGeoraster(buffer);
+        console.log(`📦 ${name} raster:`, georaster);
 
-          if (name === "OGIRRI") {
-            map.addLayer(layer);
-            updateLegend(name, ranges, isGradient);
-          }
-
-          console.log(`✅ Registered: ${name}`);
-          progress.style.display = "none";
-        })
-        .catch(err => {
-          console.error(`❌ ${name} load failed:`, err);
-          progress.style.display = "none";
+        const layer = new GeoRasterLayer({
+          georaster,
+          resolution: 64, // High-res for clarity
+          opacity: 0.85,
+          pixelValuesToColorFn: values => {
+            const val = values[0];
+            if (val == null || val < valueMin || val > valueMax) return null;
+            return typeof colorScale === "function" ? colorScale(val) : colorScale;
+          },
+          zIndex: 10
         });
+
+        layer._legend = ranges;
+        layer._isGradient = isGradient;
+        layers[name] = layer;
+        overlayControl.addOverlay(layer, name);
+
+        if (name === "OGIRRI") {
+          map.addLayer(layer);
+          updateLegend(name, ranges, isGradient);
+        }
+
+        console.log(`✅ Registered: ${name}`);
+        progress.style.display = "none";
+      };
+
+      xhr.onerror = () => {
+        console.error(`❌ Failed to load ${name}`);
+        progress.style.display = "none";
+      };
+
+      xhr.send();
     }
 
-    // OGIRRI gradient
+    function showHoverValue(e) {
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+      const activeLayer = Object.values(layers).find(l => map.hasLayer(l));
+      if (!activeLayer?.getValueAtLatLng) return;
+
+      activeLayer.getValueAtLatLng(lat, lng).then(val => {
+        if (val && val[0] != null) {
+          cursorInfo.innerHTML = `${activeLayer.options.name}: <strong>${val[0].toFixed(2)}</strong>`;
+          cursorInfo.style.left = e.originalEvent.pageX + 10 + "px";
+          cursorInfo.style.top = e.originalEvent.pageY + 10 + "px";
+          cursorInfo.style.display = "block";
+        } else {
+          cursorInfo.style.display = "none";
+        }
+      });
+    }
+
+    function showBothValuesAt(latlng) {
+      Promise.all(
+        Object.entries(layers).map(([name, layer]) => {
+          if (layer.getValueAtLatLng)
+            return layer.getValueAtLatLng(latlng.lat, latlng.lng)
+              .then(val => `${name}: ${val?.[0]?.toFixed(2) ?? "No data"}`);
+          return Promise.resolve(`${name}: Not loaded`);
+        })
+      ).then(results => {
+        const html = results.join("<br>");
+        L.popup()
+          .setLatLng(latlng)
+          .setContent(html)
+          .openOn(map);
+      });
+    }
+
+    map.on("mousemove", showHoverValue);
+    map.on("click", e => showBothValuesAt(e.latlng));
+
+    L.Control.geocoder({ defaultMarkGeocode: true }).on("markgeocode", function(e) {
+      map.setView(e.geocode.center, 11);
+      showBothValuesAt(e.geocode.center);
+    }).addTo(map);
+
+    // OGIRRI (gradient)
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -168,10 +221,10 @@
         800, 923.07, 1170.19, 1279.48,
         1425.19, 1490.18, 1588.63, 1619.15
       ]).mode("lrgb"),
-      ranges: []
+      ranges: [] // Gradient legend
     });
 
-    // OGTILT stepped
+    // OGTILT (stepped)
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -208,33 +261,6 @@
       const layer = layers[e.name];
       if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
     });
-
-    // 🔍 Show both values on hover
-    map.on("mousemove", function(e) {
-      const activeLayers = Object.entries(layers).filter(([_, l]) => map.hasLayer(l));
-      const promises = activeLayers.map(([name, layer]) =>
-        layer.getValueAtLatLngAsync?.(e.latlng.lat, e.latlng.lng).then(val =>
-          `${name}: ${val && val[0] != null ? val[0].toFixed(2) : "No data"}`
-        )
-      );
-      Promise.all(promises).then(results => {
-        info.innerHTML = results.join("<br>");
-      });
-    });
-
-    // 📍 Also show both values on click
-    map.on("click", function(e) {
-      const activeLayers = Object.entries(layers).filter(([_, l]) => map.hasLayer(l));
-      const promises = activeLayers.map(([name, layer]) =>
-        layer.getValueAtLatLngAsync?.(e.latlng.lat, e.latlng.lng).then(val =>
-          `${name}: ${val && val[0] != null ? val[0].toFixed(2) : "No data"}`
-        )
-      );
-      Promise.all(promises).then(results => {
-        alert(`📍 Data at (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}):\n` + results.join("\n"));
-      });
-    });
   </script>
 </body>
 </html>
-
