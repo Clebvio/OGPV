@@ -7,7 +7,12 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; cursor: crosshair; }
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      cursor: crosshair;
+    }
     .info {
       position: absolute;
       bottom: 20px;
@@ -29,11 +34,6 @@
       line-height: 1.4;
       z-index: 1000;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
-    }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      margin-bottom: 2px;
     }
     .legend-color {
       width: 16px;
@@ -61,6 +61,7 @@
   <div class="legend" id="legend">Legend will load with data layer.</div>
   <div id="progressContainer">Loading…</div>
 
+  <!-- Libraries -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   <script src="https://unpkg.com/georaster"></script>
@@ -68,14 +69,16 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
 
   <script>
-    const map = L.map('map', { preferCanvas: true }).setView([53.0, -113.0], 5);
+    const map = L.map("map", {
+      preferCanvas: true
+    }).setView([51, -112.5], 6); // Centered in your desired lon range
 
-    const baseTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    const baseTiles = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
       attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
       maxZoom: 16
     }).addTo(map);
 
-    const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+    const labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
       attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
       maxZoom: 16,
       zIndex: 1000
@@ -85,12 +88,9 @@
     const legend = document.getElementById("legend");
     const progress = document.getElementById("progressContainer");
 
-    L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', function(e) {
+    L.Control.geocoder({ defaultMarkGeocode: true }).on("markgeocode", function (e) {
       map.setView(e.geocode.center, 10);
     }).addTo(map);
-
-    const layers = {};
-    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
 
     function updateLegend(title, ranges, isGradient = false) {
       if (isGradient) {
@@ -109,17 +109,22 @@
       }
     }
 
+    const layers = {};
+    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
+
     function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
-      console.log(`🛰️ Starting download: ${name}`);
-      progress.innerText = `Downloading ${name}… 0%`;
+      console.log(`🛰️ Starting download for ${name}`);
+      progress.innerText = `Downloading ${name}…`;
       progress.style.display = "block";
 
-      fetch(url, { headers: { "Cache-Control": "no-cache" } })
+      fetch(url)
         .then(async res => {
           const contentLength = res.headers.get("content-length");
           if (!res.body || !contentLength) {
-            console.warn(`⚠️ No content-length for ${name}`);
-            return parseGeoraster(await res.arrayBuffer());
+            console.warn(`⚠️ No content-length for ${name}, using fallback`);
+            const buffer = await res.arrayBuffer();
+            progress.innerText = `Processing ${name}…`;
+            return parseGeoraster(buffer);
           }
 
           const total = parseInt(contentLength, 10);
@@ -137,12 +142,13 @@
           }
 
           const blob = new Blob(chunks);
+          progress.innerText = `Processing ${name}…`;
           return parseGeoraster(await blob.arrayBuffer());
         })
         .then(georaster => {
           const layer = new GeoRasterLayer({
             georaster,
-            resolution: null, // force full resolution
+            resolution: null,
             opacity: 0.95,
             zIndex: 10,
             pixelValuesToColorFn: values => {
@@ -157,22 +163,23 @@
           layer._isGradient = isGradient;
 
           overlayControl.addOverlay(layer, name);
+
           if (name === "OGIRRI") {
             map.addLayer(layer);
             updateLegend(name, ranges, isGradient);
           }
 
-          console.log(`✅ Registered: ${name}`);
+          console.log(`✅ Finished loading ${name}`);
           progress.style.display = "none";
         })
         .catch(err => {
-          console.error(`❌ ${name} load failed:`, err);
-          progress.innerText = `❌ Failed to load ${name}`;
+          console.error(`❌ Failed to load ${name}:`, err);
+          progress.innerText = `❌ ${name} failed to load`;
           setTimeout(() => (progress.style.display = "none"), 5000);
         });
     }
 
-    // OGIRRI (gradient)
+    // Gradient: OGIRRI
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -186,10 +193,10 @@
         800, 923.07, 1170.19, 1279.48,
         1425.19, 1490.18, 1588.63, 1619.15
       ]).mode("lrgb"),
-      ranges: []
+      ranges: [] // gradient legend
     });
 
-    // OGTILT (stepped)
+    // Stepped: OGTILT
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -222,22 +229,10 @@
       ]
     });
 
-    map.on("overlayadd", e => {
+    // Layer toggle listener
+    map.on("overlayadd", function(e) {
       const layer = layers[e.name];
       if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
-    });
-
-    map.on("mousemove", function(e) {
-      const activeLayer = Object.values(layers).find(l => map.hasLayer(l));
-      if (activeLayer?.getValueAtLatLng) {
-        activeLayer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-          if (val && val[0] != null) {
-            info.innerHTML = `<strong>${val[0].toFixed(2)}</strong>`;
-          } else {
-            info.innerHTML = "No data here…";
-          }
-        });
-      }
     });
   </script>
 </body>
