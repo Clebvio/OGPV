@@ -7,11 +7,50 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; cursor: crosshair; }
-    .info { position: absolute; bottom: 20px; left: 10px; background: white; padding: 6px 12px; font-size: 14px; border-radius: 4px; z-index: 1000; }
-    .legend { position: absolute; bottom: 20px; right: 10px; background: white; padding: 10px; font-size: 12px; border-radius: 4px; line-height: 1.4; z-index: 1000; box-shadow: 0 0 10px rgba(0,0,0,0.3); }
-    .legend-item { display: flex; align-items: center; margin-bottom: 2px; }
-    .legend-color { width: 16px; height: 12px; margin-right: 6px; }
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      cursor: crosshair;
+      background: #2a2a2a;
+    }
+
+    .info {
+      position: absolute;
+      bottom: 20px;
+      left: 10px;
+      background: white;
+      padding: 6px 12px;
+      font-size: 14px;
+      border-radius: 4px;
+      z-index: 1000;
+    }
+
+    .legend {
+      position: absolute;
+      bottom: 20px;
+      right: 10px;
+      background: white;
+      padding: 10px;
+      font-size: 12px;
+      border-radius: 4px;
+      line-height: 1.4;
+      z-index: 1000;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 2px;
+    }
+
+    .legend-color {
+      width: 16px;
+      height: 12px;
+      margin-right: 6px;
+    }
+
     #progressContainer {
       position: absolute;
       top: 10px;
@@ -25,15 +64,17 @@
       display: none;
       z-index: 1001;
     }
+
     #hoverBox {
       position: absolute;
       pointer-events: none;
-      background: rgba(255, 255, 255, 0.85);
-      padding: 5px 8px;
-      font-size: 13px;
-      border-radius: 4px;
-      border: 1px solid #ccc;
-      z-index: 1000;
+      z-index: 1002;
+      background: rgba(0, 0, 0, 0.85);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      display: none;
     }
   </style>
 </head>
@@ -42,7 +83,7 @@
   <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
   <div id="progressContainer">Loading…</div>
-  <div id="hoverBox" style="display:none;"></div>
+  <div id="hoverBox"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
@@ -51,90 +92,109 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
 
   <script>
-    const map = L.map('map', { preferCanvas: true });
-    const OGIRRI_BOUNDS = [[41, -118], [61, -107]];
-    map.fitBounds(OGIRRI_BOUNDS);
+    const map = L.map("map", {
+      preferCanvas: true
+    }).setView([51, -96], 4);
 
-    const baseMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
-      maxZoom: 18
+    const baseMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "&copy; Esri",
+      maxZoom: 16
     }).addTo(map);
 
-    const refLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+    const labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "&copy; Esri Labels",
+      maxZoom: 16,
       zIndex: 1000
     }).addTo(map);
 
-    const info = document.getElementById("info");
-    const legend = document.getElementById("legend");
+    const osmLabels = L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
+      opacity: 0.6,
+      zIndex: 1000
+    }).addTo(map);
+
     const progress = document.getElementById("progressContainer");
+    const legend = document.getElementById("legend");
+    const info = document.getElementById("info");
     const hoverBox = document.getElementById("hoverBox");
 
-    const layers = {};
-    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
+    L.Control.geocoder({ defaultMarkGeocode: true }).on("markgeocode", function (e) {
+      map.setView(e.geocode.center, 10);
+    }).addTo(map);
 
-    function updateLegend(title, ranges, isGradient = false) {
+    function updateLegend(title, ranges, isGradient) {
       if (isGradient) {
         legend.innerHTML = `
           <strong>${title}</strong><br>
           <div style="background: linear-gradient(to right, #ffffff, #191919, #4e4e4e, #6a6a6a, #7cd2e1, #93e9e7, #c7f7c6, #f8ff8a);
                       height: 15px; width: 150px; margin-bottom: 5px; border: 1px solid #ccc;"></div>
-          <div style="display: flex; justify-content: space-between;"><span>800</span><span>1600</span></div>`;
+          <div style="display: flex; justify-content: space-between;">
+            <span>800</span><span>1600</span>
+          </div>`;
       } else {
         legend.innerHTML = `<strong>${title}</strong><br>` + ranges.map(r => `
-          <div class="legend-item"><div class="legend-color" style="background:${r.color}"></div>${r.label}</div>`).join('');
+          <div class="legend-item">
+            <div class="legend-color" style="background:${r.color}"></div>${r.label}
+          </div>`).join("");
       }
     }
 
+    const layers = {};
+    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
+
     function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
-      console.log("🛰️ Loading " + name);
-      progress.innerText = `Loading ${name}…`;
+      console.log(`🛰️ Loading ${name}...`);
+      progress.innerText = `Downloading ${name}…`;
       progress.style.display = "block";
 
       const xhr = new XMLHttpRequest();
-      xhr.open("GET", url, true);
+      xhr.open("GET", url);
       xhr.responseType = "arraybuffer";
       xhr.onprogress = e => {
         if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100);
-          progress.innerText = `Downloading ${name}: ${percent}%`;
+          const pct = Math.round((e.loaded / e.total) * 100);
+          progress.innerText = `${name}: ${pct}%`;
         }
       };
+
       xhr.onload = () => {
         parseGeoraster(xhr.response).then(georaster => {
           const layer = new GeoRasterLayer({
             georaster,
-            resolution: 64,
-            opacity: 0.9,
             pixelValuesToColorFn: values => {
               const val = values[0];
               if (val == null || val < valueMin || val > valueMax) return null;
-              return colorScale(val);
+              return typeof colorScale === "function" ? colorScale(val) : colorScale;
             },
+            opacity: 0.95,
+            resolution: null,
             zIndex: 10
           });
 
+          layers[name] = layer;
           layer._legend = ranges;
           layer._isGradient = isGradient;
-          layers[name] = layer;
+
           overlayControl.addOverlay(layer, name);
 
-          if (Object.keys(layers).length === 1) {
+          if (name === "OGIRRI") {
             map.addLayer(layer);
             updateLegend(name, ranges, isGradient);
           }
 
-          console.log(`✅ ${name} ready`);
+          console.log(`✅ Registered: ${name}`);
           progress.style.display = "none";
         });
       };
+
       xhr.onerror = () => {
-        console.error("❌ Error loading " + name);
+        console.error(`❌ ${name} load failed`);
         progress.style.display = "none";
       };
+
       xhr.send();
     }
 
-    // OGIRRI
+    // OGIRRI — gradient
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -151,7 +211,7 @@
       ranges: []
     });
 
-    // OGTILT
+    // OGTILT — stepped
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -184,20 +244,19 @@
       ]
     });
 
-    map.on("overlayadd", e => {
+    map.on("overlayadd", function (e) {
       const layer = layers[e.name];
       if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
     });
 
-    // Hover value at cursor
     map.on("mousemove", e => {
       const active = Object.values(layers).find(l => map.hasLayer(l));
       if (!active?.getValueAtLatLng) return;
 
       active.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
         if (val && val[0] != null) {
-          hoverBox.style.left = (e.originalEvent.pageX + 15) + 'px';
-          hoverBox.style.top = (e.originalEvent.pageY + 15) + 'px';
+          hoverBox.style.left = (e.originalEvent.pageX + 10) + "px";
+          hoverBox.style.top = (e.originalEvent.pageY + 10) + "px";
           hoverBox.innerHTML = `<strong>${val[0].toFixed(2)}</strong>`;
           hoverBox.style.display = "block";
         } else {
@@ -206,23 +265,23 @@
       });
     });
 
-    map.on("mouseout", () => hoverBox.style.display = "none");
-
-    // Click = both layer values
     map.on("click", e => {
-      const lat = e.latlng.lat, lng = e.latlng.lng;
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+
       Promise.all(
-        Object.entries(layers).map(([name, layer]) => (
-          layer.getValueAtLatLng?.(lat, lng).then(val => `${name}: ${val?.[0]?.toFixed(2) ?? "No data"}`)
-        ))
+        Object.entries(layers).map(([name, layer]) =>
+          layer.getValueAtLatLng?.(lat, lng).then(val =>
+            `${name}: ${val?.[0]?.toFixed(2) ?? "No data"}`
+          )
+        )
       ).then(results => {
         info.innerHTML = results.join("<br>");
       });
     });
 
-    L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', function(e) {
-      map.setView(e.geocode.center, 10);
-    }).addTo(map);
+    // Set viewport bounding box for startup
+    map.fitBounds([[51, -118], [57, -107]]);
   </script>
 </body>
 </html>
