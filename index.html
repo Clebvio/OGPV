@@ -36,15 +36,15 @@
       z-index: 1000;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
     }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      margin-bottom: 2px;
-    }
     .legend-color {
       width: 16px;
       height: 12px;
       margin-right: 6px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 2px;
     }
     #progressContainer {
       position: absolute;
@@ -59,6 +59,16 @@
       display: none;
       z-index: 1001;
     }
+    #cursor-value {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(255,255,255,0.95);
+      padding: 2px 6px;
+      font-size: 12px;
+      border-radius: 3px;
+      border: 1px solid #ccc;
+      z-index: 1001;
+    }
   </style>
 </head>
 <body>
@@ -66,6 +76,7 @@
   <div class="info" id="info">Hover over the map to see values…</div>
   <div class="legend" id="legend">Legend will load with data layer.</div>
   <div id="progressContainer">Loading…</div>
+  <div id="cursor-value" style="display:none;"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
@@ -74,12 +85,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
 
   <script>
-    const map = L.map('map', {
-      preferCanvas: true
-    });
+    const map = L.map('map', { preferCanvas: true })
+      .setView([51, -112], 5);
 
-    const baseTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
+    // Basemap
+    const base = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri',
       maxZoom: 16
     }).addTo(map);
 
@@ -91,10 +102,10 @@
     const info = document.getElementById("info");
     const legend = document.getElementById("legend");
     const progress = document.getElementById("progressContainer");
+    const hoverBox = document.getElementById("cursor-value");
 
-    L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', function(e) {
-      map.setView(e.geocode.center, 10);
-    }).addTo(map);
+    const layers = {};
+    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
 
     function updateLegend(title, ranges, isGradient = false) {
       if (isGradient) {
@@ -113,9 +124,6 @@
       }
     }
 
-    const layers = {};
-    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
-
     async function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
       console.log(`🛰️ Attempting to load ${name} from ${url}`);
       progress.innerHTML = `<strong>${name}</strong>: <progress value="0" max="100" id="progressBar"></progress>`;
@@ -125,17 +133,14 @@
         const response = await fetch(url);
         const total = parseInt(response.headers.get("content-length") || "0", 10);
         const reader = response.body.getReader();
-        let received = 0;
-        const chunks = [];
+        let received = 0, chunks = [];
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           chunks.push(value);
           received += value.length;
-          if (total) {
-            document.getElementById("progressBar").value = Math.floor((received / total) * 100);
-          }
+          if (total) document.getElementById("progressBar").value = Math.floor((received / total) * 100);
         }
 
         const blob = new Blob(chunks);
@@ -144,7 +149,7 @@
 
         const layer = new GeoRasterLayer({
           georaster,
-          resolution: null,
+          resolution: 256,
           opacity: 0.85,
           zIndex: 10,
           pixelValuesToColorFn: values => {
@@ -162,8 +167,26 @@
         if (name === "OGIRRI") {
           map.addLayer(layer);
           updateLegend(name, ranges, isGradient);
-          map.fitBounds(layer.getBounds()); // ✅ Zoom to OGIRRI extent
         }
+
+        map.on("mousemove", function(e) {
+          const lat = e.latlng.lat;
+          const lng = e.latlng.lng;
+
+          hoverBox.style.left = e.containerPoint.x + 15 + "px";
+          hoverBox.style.top = e.containerPoint.y + 15 + "px";
+          hoverBox.style.display = "block";
+
+          if (typeof layer.getValueAtLatLng === "function") {
+            layer.getValueAtLatLng(lat, lng).then(val => {
+              if (val && val[0] != null) {
+                hoverBox.innerHTML = `${name}: ${val[0].toFixed(2)}`;
+              } else {
+                hoverBox.innerHTML = "No data";
+              }
+            });
+          }
+        });
 
         console.log(`✅ ${name} loaded`);
       } catch (err) {
@@ -174,7 +197,7 @@
       }
     }
 
-    // 🌈 OGIRRI (gradient)
+    // OGIRRI (Gradient)
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -191,7 +214,7 @@
       ranges: []
     });
 
-    // 🟪 OGTILT (discrete)
+    // OGTILT (Stepped)
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -228,26 +251,6 @@
       const layer = layers[e.name];
       if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
     });
-
-    map.on("mousemove", e => {
-      let shown = false;
-
-      Object.entries(layers).forEach(([name, layer]) => {
-        if (!map.hasLayer(layer)) return;
-
-        if (typeof layer.getValueAtLatLng === "function") {
-          layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-            if (val && val[0] != null) {
-              info.innerHTML = `<strong>${name}</strong>: ${val[0].toFixed(2)}`;
-              shown = true;
-            }
-          });
-        }
-      });
-
-      if (!shown) info.innerHTML = "Hover over the map to see values…";
-    });
   </script>
 </body>
 </html>
-
