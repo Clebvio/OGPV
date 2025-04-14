@@ -76,7 +76,7 @@
   <script>
     const map = L.map('map', {
       preferCanvas: true
-    }).setView([51, -112], 5);
+    });
 
     const baseTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
       attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
@@ -116,7 +116,7 @@
     const layers = {};
     const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
 
-    async function loadGeoTIFFLayer({ name, url, colorScale, ranges, isGradient }) {
+    async function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
       console.log(`🛰️ Attempting to load ${name} from ${url}`);
       progress.innerHTML = `<strong>${name}</strong>: <progress value="0" max="100" id="progressBar"></progress>`;
       progress.style.display = "block";
@@ -142,10 +142,6 @@
         const arrayBuffer = await blob.arrayBuffer();
         const georaster = await parseGeoraster(arrayBuffer);
 
-        const valueMin = georaster.mins[0];
-        const valueMax = georaster.maxs[0];
-        console.log(name + " stats", { min: valueMin, max: valueMax, noData: georaster.noDataValue });
-
         const layer = new GeoRasterLayer({
           georaster,
           resolution: null,
@@ -153,9 +149,7 @@
           zIndex: 10,
           pixelValuesToColorFn: values => {
             const val = values[0];
-            if (val == null || isNaN(val)) return "#ff00ff"; // debug color
-            if (val < valueMin || val > valueMax) return null;
-            console.log(name + " pixel:", val); // <-- debug logging
+            if (val == null || val < valueMin || val > valueMax) return null;
             return typeof colorScale === "function" ? colorScale(val) : colorScale;
           }
         });
@@ -168,20 +162,8 @@
         if (name === "OGIRRI") {
           map.addLayer(layer);
           updateLegend(name, ranges, isGradient);
+          map.fitBounds(layer.getBounds()); // ✅ Zoom to OGIRRI extent
         }
-
-        map.on("mousemove", e => {
-          if (!map.hasLayer(layer)) return;
-          if (typeof layer.getValueAtLatLng === "function") {
-            layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-              if (val && val[0] != null) {
-                info.innerHTML = `<strong>${name}: ${val[0].toFixed(2)}</strong>`;
-              } else {
-                info.innerHTML = "No data here…";
-              }
-            });
-          }
-        });
 
         console.log(`✅ ${name} loaded`);
       } catch (err) {
@@ -196,6 +178,8 @@
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
+      valueMin: 800,
+      valueMax: 1680,
       isGradient: true,
       colorScale: chroma.scale([
         "#ffffff", "#191919", "#4e4e4e", "#6a6a6a",
@@ -211,6 +195,8 @@
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
+      valueMin: 29,
+      valueMax: 55,
       isGradient: false,
       colorScale: val => {
         if (val < 32) return "#30123b";
@@ -241,6 +227,25 @@
     map.on("overlayadd", e => {
       const layer = layers[e.name];
       if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
+    });
+
+    map.on("mousemove", e => {
+      let shown = false;
+
+      Object.entries(layers).forEach(([name, layer]) => {
+        if (!map.hasLayer(layer)) return;
+
+        if (typeof layer.getValueAtLatLng === "function") {
+          layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+            if (val && val[0] != null) {
+              info.innerHTML = `<strong>${name}</strong>: ${val[0].toFixed(2)}`;
+              shown = true;
+            }
+          });
+        }
+      });
+
+      if (!shown) info.innerHTML = "Hover over the map to see values…";
     });
   </script>
 </body>
