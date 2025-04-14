@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>OGPV Solar Resource Data</title>
+  <title>Solar Resource Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
@@ -13,16 +13,6 @@
       padding: 0;
       cursor: crosshair;
       background: #2c2c2c;
-    }
-    .info {
-      position: absolute;
-      bottom: 20px;
-      left: 10px;
-      background: white;
-      padding: 6px 12px;
-      font-size: 14px;
-      border-radius: 4px;
-      z-index: 1000;
     }
     .legend {
       position: absolute;
@@ -59,30 +49,23 @@
       display: none;
       z-index: 1001;
     }
-    #progressBarFill {
-      height: 10px;
-      background: #4caf50;
-      width: 0%;
-    }
-    #progressBarWrapper {
-      width: 160px;
-      background: #333;
-      border-radius: 6px;
-      overflow: hidden;
-      margin-top: 4px;
+    .cursor-value {
+      position: absolute;
+      background: #222;
+      color: white;
+      padding: 4px 8px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 1100;
+      border-radius: 4px;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="info" id="info">Hover over the map to see values…</div>
-  <div class="legend" id="legend">Legend will load with data layer.</div>
-  <div id="progressContainer">
-    Loading…
-    <div id="progressBarWrapper">
-      <div id="progressBarFill"></div>
-    </div>
-  </div>
+  <div class="legend" id="legend">Legend will load…</div>
+  <div id="progressContainer">Loading…</div>
+  <div class="cursor-value" id="cursorVal" style="display:none;"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
@@ -91,10 +74,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
 
   <script>
-    const map = L.map('map', { preferCanvas: true }).setView([51, -112], 5);
+    const map = L.map('map', {
+      preferCanvas: true
+    }).setView([51, -112], 5);
 
-    const baseTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
+    const base = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '&copy; Esri, HERE, Garmin',
       maxZoom: 16
     }).addTo(map);
 
@@ -103,10 +88,9 @@
       zIndex: 1000
     }).addTo(map);
 
-    const info = document.getElementById("info");
     const legend = document.getElementById("legend");
     const progress = document.getElementById("progressContainer");
-    const progressBarFill = document.getElementById("progressBarFill");
+    const cursorVal = document.getElementById("cursorVal");
 
     L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', function(e) {
       map.setView(e.geocode.center, 10);
@@ -133,34 +117,32 @@
     const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
 
     async function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
-      console.log(`🛰️ Attempting to load ${name} from ${url}`);
-      progressBarFill.style.width = "0%";
+      console.log(`🛰️ Loading ${name} from ${url}`);
+      progress.innerHTML = `<strong>${name}</strong>: <progress value="0" max="100" id="progressBar"></progress>`;
       progress.style.display = "block";
 
       try {
         const response = await fetch(url);
-        const total = parseInt(response.headers.get("content-length") || "0", 10);
+        const total = +response.headers.get("content-length");
         const reader = response.body.getReader();
-        let received = 0;
         const chunks = [];
+        let received = 0;
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           chunks.push(value);
           received += value.length;
-          if (total) {
-            progressBarFill.style.width = `${Math.floor((received / total) * 100)}%`;
-          }
+          if (total) document.getElementById("progressBar").value = Math.floor((received / total) * 100);
         }
 
-        const blob = new Blob(chunks);
-        const arrayBuffer = await blob.arrayBuffer();
+        const arrayBuffer = await new Blob(chunks).arrayBuffer();
         const georaster = await parseGeoraster(arrayBuffer);
 
         const layer = new GeoRasterLayer({
           georaster,
-          resolution: 64,
+          resolution: null, // full resolution
+          keepBuffer: 0,
           opacity: 0.85,
           zIndex: 10,
           pixelValuesToColorFn: values => {
@@ -178,29 +160,36 @@
         if (name === "OGIRRI") {
           map.addLayer(layer);
           updateLegend(name, ranges, isGradient);
-          map.fitBounds(layer.getBounds());
         }
 
-        map.on("mousemove", e => {
+        map.on("mousemove", function(e) {
           if (!map.hasLayer(layer)) return;
-          georaster.getValuesAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
-            if (val && val[0] != null) {
-              info.innerHTML = `<strong>${name}: ${val[0].toFixed(2)}</strong>`;
-            } else {
-              info.innerHTML = "No data here…";
-            }
-          });
+          if (typeof layer.getValueAtLatLng === "function") {
+            layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
+              if (val && val[0] != null) {
+                cursorVal.innerText = `${name}: ${val[0].toFixed(2)}`;
+                cursorVal.style.left = e.originalEvent.pageX + 10 + "px";
+                cursorVal.style.top = e.originalEvent.pageY - 10 + "px";
+                cursorVal.style.display = "block";
+              } else {
+                cursorVal.style.display = "none";
+              }
+            });
+          }
         });
+
+        map.on("mouseout", () => cursorVal.style.display = "none");
 
         console.log(`✅ ${name} loaded`);
       } catch (err) {
         console.error(`❌ ${name} failed:`, err);
         progress.innerHTML = `❌ ${name} load failed`;
       } finally {
-        setTimeout(() => (progress.style.display = "none"), 1500);
+        setTimeout(() => (progress.style.display = "none"), 2000);
       }
     }
 
+    // 🌈 OGIRRI (gradient)
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -217,6 +206,7 @@
       ranges: []
     });
 
+    // 🟪 OGTILT (stepped)
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -256,3 +246,4 @@
   </script>
 </body>
 </html>
+
