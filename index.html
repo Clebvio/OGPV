@@ -14,38 +14,43 @@
       cursor: crosshair;
       background: #2c2c2c;
     }
+
     .info {
       position: absolute;
       bottom: 20px;
       left: 10px;
       background: white;
-      padding: 6px 12px;
-      font-size: 14px;
+      padding: 8px 14px;
+      font-size: 16px;
       border-radius: 4px;
       z-index: 1000;
     }
+
     .legend {
       position: absolute;
       bottom: 20px;
       right: 10px;
       background: white;
-      padding: 10px;
-      font-size: 12px;
+      padding: 12px;
+      font-size: 14px;
       border-radius: 4px;
       line-height: 1.4;
       z-index: 1000;
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
     }
-    .legend-color {
-      width: 16px;
-      height: 12px;
-      margin-right: 6px;
-    }
+
     .legend-item {
       display: flex;
       align-items: center;
       margin-bottom: 2px;
     }
+
+    .legend-color {
+      width: 20px;
+      height: 14px;
+      margin-right: 6px;
+    }
+
     #progressContainer {
       position: absolute;
       top: 10px;
@@ -53,20 +58,21 @@
       transform: translateX(-50%);
       background: rgba(0,0,0,0.8);
       color: #fff;
-      padding: 6px 12px;
-      font-size: 14px;
+      padding: 8px 14px;
+      font-size: 16px;
       border-radius: 4px;
       display: none;
       z-index: 1001;
     }
+
     #cursor-value {
       position: absolute;
       pointer-events: none;
-      background: rgba(255,255,255,0.95);
-      padding: 2px 6px;
-      font-size: 12px;
-      border-radius: 3px;
+      padding: 4px 8px;
+      font-size: 14px;
+      background: #ffffffdd;
       border: 1px solid #ccc;
+      border-radius: 3px;
       z-index: 1001;
     }
   </style>
@@ -85,12 +91,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
 
   <script>
-    const map = L.map('map', { preferCanvas: true })
-      .setView([51, -112], 5);
+    const map = L.map('map', {
+      preferCanvas: true
+    }).setView([51, -112], 5);
 
-    // Basemap
-    const base = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-      attribution: 'Tiles &copy; Esri',
+    const baseTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '&copy; Esri, HERE, Garmin, FAO, NOAA, USGS, EPA',
       maxZoom: 16
     }).addTo(map);
 
@@ -99,13 +105,24 @@
       zIndex: 1000
     }).addTo(map);
 
+    const vectorOverlay = L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
+      {
+        attribution: '&copy; CartoDB',
+        maxZoom: 16,
+        opacity: 1,
+        zIndex: 1001
+      }
+    ).addTo(map);
+
     const info = document.getElementById("info");
     const legend = document.getElementById("legend");
     const progress = document.getElementById("progressContainer");
-    const hoverBox = document.getElementById("cursor-value");
+    const cursorVal = document.getElementById("cursor-value");
 
-    const layers = {};
-    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
+    L.Control.geocoder({ defaultMarkGeocode: true }).on('markgeocode', function(e) {
+      map.setView(e.geocode.center, 10);
+    }).addTo(map);
 
     function updateLegend(title, ranges, isGradient = false) {
       if (isGradient) {
@@ -124,6 +141,9 @@
       }
     }
 
+    const layers = {};
+    const overlayControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
+
     async function loadGeoTIFFLayer({ name, url, valueMin, valueMax, colorScale, ranges, isGradient }) {
       console.log(`🛰️ Attempting to load ${name} from ${url}`);
       progress.innerHTML = `<strong>${name}</strong>: <progress value="0" max="100" id="progressBar"></progress>`;
@@ -133,14 +153,17 @@
         const response = await fetch(url);
         const total = parseInt(response.headers.get("content-length") || "0", 10);
         const reader = response.body.getReader();
-        let received = 0, chunks = [];
+        let received = 0;
+        const chunks = [];
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           chunks.push(value);
           received += value.length;
-          if (total) document.getElementById("progressBar").value = Math.floor((received / total) * 100);
+          if (total) {
+            document.getElementById("progressBar").value = Math.floor((received / total) * 100);
+          }
         }
 
         const blob = new Blob(chunks);
@@ -149,7 +172,7 @@
 
         const layer = new GeoRasterLayer({
           georaster,
-          resolution: 256,
+          resolution: null,
           opacity: 0.85,
           zIndex: 10,
           pixelValuesToColorFn: values => {
@@ -169,26 +192,28 @@
           updateLegend(name, ranges, isGradient);
         }
 
-        map.on("mousemove", function(e) {
-          const lat = e.latlng.lat;
-          const lng = e.latlng.lng;
+        console.log(`✅ ${name} loaded`);
 
-          hoverBox.style.left = e.containerPoint.x + 15 + "px";
-          hoverBox.style.top = e.containerPoint.y + 15 + "px";
-          hoverBox.style.display = "block";
-
+        map.on("mousemove", e => {
+          if (!map.hasLayer(layer)) return;
           if (typeof layer.getValueAtLatLng === "function") {
-            layer.getValueAtLatLng(lat, lng).then(val => {
+            layer.getValueAtLatLng(e.latlng.lat, e.latlng.lng).then(val => {
               if (val && val[0] != null) {
-                hoverBox.innerHTML = `${name}: ${val[0].toFixed(2)}`;
+                cursorVal.style.display = "block";
+                cursorVal.style.left = e.containerPoint.x + 15 + "px";
+                cursorVal.style.top = e.containerPoint.y + 15 + "px";
+                cursorVal.innerHTML = `${name}: ${val[0].toFixed(2)}`;
               } else {
-                hoverBox.innerHTML = "No data";
+                cursorVal.style.display = "none";
               }
             });
           }
         });
 
-        console.log(`✅ ${name} loaded`);
+        map.on("mouseout", () => {
+          cursorVal.style.display = "none";
+        });
+
       } catch (err) {
         console.error(`❌ ${name} failed:`, err);
         progress.innerHTML = `❌ ${name} load failed`;
@@ -197,7 +222,7 @@
       }
     }
 
-    // OGIRRI (Gradient)
+    // 🌈 OGIRRI
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -214,7 +239,7 @@
       ranges: []
     });
 
-    // OGTILT (Stepped)
+    // 🟪 OGTILT
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
