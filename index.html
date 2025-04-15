@@ -77,13 +77,12 @@
   <script>
     const map = L.map('map', { preferCanvas: true }).setView([51, -112], 5);
 
-    // ✅ Dark gray base map (ESRI) and labels
     const baseMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
       attribution: "&copy; Esri",
       maxZoom: 16
     }).addTo(map);
 
-    const labelOverlay = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
+    const labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 16,
       zIndex: 1000
     }).addTo(map);
@@ -154,6 +153,11 @@
           }
         });
 
+        layer.once("load", () => {
+          console.log(`✅ ${name} rendered on map.`);
+          map.fitBounds(layer.getBounds());
+        });
+
         layers[name] = layer;
         layer._legend = ranges;
         layer._isGradient = isGradient;
@@ -164,7 +168,7 @@
           updateLegend(name, ranges, isGradient);
         }
 
-        // Hover & click
+        // Hover readout
         map.on("mousemove", e => {
           if (!map.hasLayer(layer)) return;
           if (typeof layer.getValueAtLatLng === "function") {
@@ -177,8 +181,6 @@
             });
           }
         });
-
-        console.log(`✅ ${name} loaded`);
       } catch (err) {
         console.error(`❌ ${name} failed:`, err);
         progress.innerHTML = `❌ ${name} load failed`;
@@ -187,7 +189,6 @@
       }
     }
 
-    // 🌈 OGIRRI - Gradient
     loadGeoTIFFLayer({
       name: "OGIRRI",
       url: "https://clebvio.github.io/OGPV/OGIRRI.tif",
@@ -201,10 +202,9 @@
         800, 923.07, 1170.19, 1279.48,
         1425.19, 1490.18, 1588.63, 1619.15
       ]).mode("lrgb"),
-      ranges: [] // for gradient legend
+      ranges: []
     });
 
-    // 🟪 OGTILT - Stepped
     loadGeoTIFFLayer({
       name: "OGTILT",
       url: "https://clebvio.github.io/OGPV/OGTILT.tif",
@@ -237,7 +237,6 @@
       ]
     });
 
-    // Update legend on toggle
     map.on("overlayadd", e => {
       const layer = layers[e.name];
       if (layer) updateLegend(e.name, layer._legend, layer._isGradient);
@@ -245,3 +244,4 @@
   </script>
 </body>
 </html>
+
